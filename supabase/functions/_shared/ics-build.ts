@@ -160,11 +160,16 @@ export function armarRrule(
     case 'quincenal':
       regla = 'FREQ=WEEKLY;INTERVAL=2';
       break;
+    // El dia y el mes van escritos en la regla a proposito. Sin BYMONTHDAY, cada
+    // cliente decide por su cuenta que hacer con una fecha que no existe: para un
+    // cumpleaños el 29 de febrero, ICAL.js lo corre al 1 de marzo y otros lo
+    // saltean. Con la regla explicita todos hacen lo mismo — saltear — y la app
+    // y el calendario del celular muestran siempre lo mismo.
     case 'mensual':
-      regla = 'FREQ=MONTHLY';
+      regla = `FREQ=MONTHLY;BYMONTHDAY=${inicioLocal.dia}`;
       break;
     case 'anual':
-      regla = 'FREQ=YEARLY';
+      regla = `FREQ=YEARLY;BYMONTH=${inicioLocal.mes};BYMONTHDAY=${inicioLocal.dia}`;
       break;
     default:
       return null;

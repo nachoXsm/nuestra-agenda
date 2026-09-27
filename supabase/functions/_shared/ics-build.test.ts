@@ -91,8 +91,17 @@ Deno.test('armarRrule para cada tipo de repeticion', () => {
 
   assertEquals(armarRrule('no', null, null, false, inicio), null);
   assertEquals(armarRrule('diario', null, null, false, inicio), 'FREQ=DAILY');
-  assertEquals(armarRrule('mensual', null, null, false, inicio), 'FREQ=MONTHLY');
-  assertEquals(armarRrule('anual', null, null, false, inicio), 'FREQ=YEARLY');
+  // El día y el mes van explícitos en la regla: ver el comentario en
+  // armarRrule. Sin eso, cada cliente decide solo qué hacer con el 31 de un mes
+  // que no lo tiene, o con un 29 de febrero.
+  assertEquals(
+    armarRrule('mensual', null, null, false, inicio),
+    'FREQ=MONTHLY;BYMONTHDAY=27',
+  );
+  assertEquals(
+    armarRrule('anual', null, null, false, inicio),
+    'FREQ=YEARLY;BYMONTH=9;BYMONTHDAY=27',
+  );
   assertEquals(
     armarRrule('quincenal', null, null, false, inicio),
     'FREQ=WEEKLY;INTERVAL=2',
