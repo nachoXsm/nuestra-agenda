@@ -55,6 +55,10 @@ jobs:
           ls -la _sitio
 
       - uses: actions/configure-pages@v5
+        with:
+          # Prende GitHub Pages solo la primera vez, así no hay que ir a
+          # Settings a mano. Si ya estaba prendido, no hace nada.
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
