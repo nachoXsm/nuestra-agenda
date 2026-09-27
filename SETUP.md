@@ -5,17 +5,49 @@ desde el navegador, con las cuentas de GitHub y Supabase que ya tenés.
 
 ---
 
-## 1. Crear el proyecto de Supabase
+## 1. El proyecto de Supabase
 
-1. Entrá a [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
-2. Nombre: `nuestra-agenda`. Región: **South America (São Paulo)**, que es la
-   más cerca de acá.
-3. Guardá la contraseña de la base que te muestra: no la vas a necesitar para
-   esto, pero sí si algún día querés entrar por SQL desde afuera.
+Hay dos caminos. **El primero es el recomendado**, sobre todo si ya usás
+Supabase para otra cosa.
+
+### Opción A: reusar un proyecto que ya tengas
+
+El plan gratuito permite **2 proyectos activos por persona**, así que es muy
+probable que no puedas crear uno nuevo. No hace falta: todo lo de esta app vive
+con el prefijo `ag_` justamente para poder convivir con otra en el mismo
+proyecto.
+
+Si vas a reusar el proyecto de **Nuestras Finanzas**, no hay un solo choque:
+
+| | Nuestras Finanzas | Nuestra Agenda |
+|---|---|---|
+| Tablas | `grupos`, `gastos`, `ingresos`, `tarjetas` | `ag_*` (diez tablas) |
+| Funciones SQL | — | `ag_*` |
+| Edge Functions | `ai-advisor`, `send-invite` | `chef-ia`, `ics-proxy`, `ics-feed` |
+
+Y el `GROQ_KEY` que usa el asesor de Finanzas es el mismo que necesita el chef,
+así que **el paso 5 ya está hecho**.
+
+Lo único que comparten de verdad es el espacio en disco y las cuotas del plan
+gratuito. Una agenda familiar ocupa unos pocos megabytes por año, así que no es
+un problema.
+
+> Correr el `schema.sql` en un proyecto que ya tiene datos es seguro: solo crea
+> cosas que empiezan con `ag_`, y no borra, modifica ni toca ninguna tabla que
+> ya exista.
+
+### Opción B: un proyecto nuevo
+
+Si tenés lugar:
+
+1. [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
+2. Nombre: `nuestra-agenda`. Región: **South America (São Paulo)**, la más cerca.
+3. Guardá la contraseña de la base que te muestra.
 4. Esperá un par de minutos a que termine de levantarse.
 
-El plan gratuito alcanza y sobra: dos personas cargando eventos y menús no
-llegan ni cerca de los límites.
+Si te aparece *"The organization has members who have exceeded their free
+project limits"*, es el límite de 2 proyectos. Andá a la opción A, o pausá uno
+de los proyectos que ya tenés.
 
 ---
 
@@ -56,25 +88,24 @@ En **Authentication** → **Sign In / Providers**:
 
 ## 4. Subir las funciones
 
-Son tres. Se pueden subir desde el navegador, sin instalar nada.
+Son tres, y cada una está preparada como **un solo archivo** para que subirlas
+desde el navegador sea una pegada por función:
 
-En **Edge Functions** → **Deploy a new function** → **Via Editor**:
+| Función      | Qué pegar                                          |
+|--------------|----------------------------------------------------|
+| `chef-ia`    | `supabase/funciones-para-pegar/chef-ia.ts`         |
+| `ics-proxy`  | `supabase/funciones-para-pegar/ics-proxy.ts`       |
+| `ics-feed`   | `supabase/funciones-para-pegar/ics-feed.ts`        |
 
-| Nombre       | Qué pegar                                     |
-|--------------|-----------------------------------------------|
-| `chef-ia`    | `supabase/functions/chef-ia/index.ts`         |
-| `ics-proxy`  | `supabase/functions/ics-proxy/index.ts`       |
-| `ics-feed`   | `supabase/functions/ics-feed/index.ts`        |
+En **Edge Functions** → **Deploy a new function** → **Via Editor**: ponés el
+nombre de la izquierda, borrás lo que viene de ejemplo y pegás el archivo
+entero.
 
-Las tres importan archivos de `supabase/functions/_shared/`. En el editor del
-navegador hay un botón para agregar archivos a la función: creá la carpeta
-`_shared` dentro de cada una y pegá los archivos que use:
+> Esos tres archivos son generados: el código que se edita está en
+> `supabase/functions/`. Si tocás algo ahí, regenerá con
+> `node supabase/armar-funciones.mjs`. El CI avisa si te olvidás.
 
-- `chef-ia` necesita `cors.ts`, `groq.ts` y `menu-sanear.ts`
-- `ics-proxy` necesita `cors.ts` y `url-segura.ts`
-- `ics-feed` necesita `feed.ts` e `ics-build.ts`
-
-> Si preferís hacerlo por consola y tenés el CLI instalado, es más corto:
+> Con el CLI de Supabase es más corto todavía y no hace falta lo anterior:
 > `supabase functions deploy chef-ia ics-proxy ics-feed` desde la raíz del repo.
 > El `supabase/config.toml` ya trae la configuración correcta.
 
@@ -91,6 +122,10 @@ Las otras dos quedan con Verify JWT en **on**, que es el valor por defecto.
 ---
 
 ## 5. La clave del agente de IA
+
+> Si reusaste el proyecto de Nuestras Finanzas, **esto ya está**: el asesor de
+> Finanzas usa el mismo secreto. Fijate en Edge Functions → Secrets si aparece
+> `GROQ_KEY` y saltealo.
 
 El agente usa Groq, que tiene un plan gratuito más que suficiente para esto.
 
