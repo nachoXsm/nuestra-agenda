@@ -6,6 +6,10 @@ Hecha para dos personas que comparten una casa y un hijo, y que se olvidan las
 cosas. Corre en el celular como app (PWA), se sirve gratis desde GitHub Pages y
 guarda todo en Supabase. No usa Vercel ni ningún otro servicio.
 
+**→ [nachoxsm.github.io/nuestra-agenda](https://nachoxsm.github.io/nuestra-agenda/)**
+
+Todavía falta conectarla con Supabase: los pasos están en [SETUP.md](SETUP.md).
+
 <p align="center">
   <img src="docs/capturas/oscuro-hoy.png" width="24%" alt="Pantalla Hoy">
   <img src="docs/capturas/oscuro-agenda.png" width="24%" alt="Agenda del mes">
