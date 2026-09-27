@@ -23,6 +23,14 @@ const RAIZ = fileURLToPath(new URL('..', import.meta.url));
 // en paralelo no se pelean por el mismo número.
 let PUERTO = 0;
 
+// El reloj de las pruebas está congelado en un instante fijo, y el del
+// navegador también (ver abrirApp). Sin esto, una prueba que siembra un evento
+// a las 19:00 de hoy pasa a la mañana y falla a la noche, porque para entonces
+// ese evento ya pasó y la tarjeta de "lo que sigue" no se dibuja.
+// Martes 29/9/2026 a las 15:00 de Buenos Aires: un día de semana, con la tarde
+// por delante.
+const AHORA = new Date('2026-09-29T15:00:00-03:00');
+
 const TIPOS = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -129,6 +137,10 @@ async function abrirApp(navegador, { semilla, antesDeCargar } = {}) {
     }, semilla);
   }
 
+  // El mismo instante que usa el lado de Node, así lo que la prueba siembra y
+  // lo que la app considera "hoy" no pueden discrepar.
+  await pagina.clock.setFixedTime(AHORA);
+
   if (antesDeCargar) await antesDeCargar(pagina);
 
   await pagina.goto(`http://localhost:${PUERTO}/`, { waitUntil: 'domcontentloaded' });
@@ -146,7 +158,7 @@ const bd = (pagina, fn) => pagina.evaluate(fn);
 
 const hoyISO = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
-    .format(new Date());
+    .format(AHORA);
 
 const enDias = (n) => {
   const d = new Date(`${hoyISO()}T12:00:00Z`);
@@ -614,6 +626,66 @@ prueba('el menú que propone el agente se revisa antes de cargarlo', async (nav)
   afirmar(
     !menu.some((m) => m.titulo === 'Sopa de zapallo'),
     'la comida que se sacó no tiene que guardarse',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
+  // Al instalar, las funciones son un paso aparte y se pueden dejar para
+  // después. Todo lo que no depende de ellas —el hogar, la agenda, el menú, la
+  // lista— tiene que andar igual, y lo que sí depende tiene que avisar con un
+  // error entendible en vez de romper la pantalla.
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  await pagina.evaluate(() => {
+    globalThis.__falso.fallarProximo = 'chefChat';
+  });
+
+  await irA(pagina, 'chef');
+  await pagina.waitForTimeout(400);
+  await pagina.fill('.chat-entrada textarea', '¿qué cocino?');
+  await pagina.click('.chat-entrada button');
+  await pagina.waitForTimeout(700);
+
+  // Avisa, y la pregunta que falló no queda colgada en la conversación.
+  afirmar(await pagina.isVisible('.aviso.mal'), 'tiene que avisar del error');
+  afirmar(
+    !(await pagina.textContent('.chat')).includes('¿qué cocino?'),
+    'la pregunta que falló no se deja en la pantalla como si hubiera andado',
+  );
+
+  // Y el resto de la app sigue entera: se puede anotar un evento.
+  await irA(pagina, 'agenda');
+  await pagina.click('.fab');
+  await pagina.waitForSelector('.hoja');
+  await pagina.fill('.hoja input[type="text"]', 'Natación');
+  await pagina.click('.hoja button[type="submit"]');
+  await pagina.waitForSelector('.hoja', { state: 'detached', timeout: 5000 });
+  await pagina.waitForTimeout(250);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.eventos.length),
+    1,
+    'la agenda tiene que andar sin las funciones',
+  );
+
+  // Y el menú también.
+  await irA(pagina, 'menu');
+  await pagina.waitForTimeout(200);
+  await pagina.click('.dia-menu .comida-slot.vacia');
+  await pagina.waitForSelector('.hoja');
+  await pagina.click('.hoja .comida-slot');
+  await pagina.waitForTimeout(150);
+  await pagina.click('.hoja button[type="submit"]');
+  await pagina.waitForSelector('.hoja', { state: 'detached', timeout: 5000 });
+  await pagina.waitForTimeout(250);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.menu.length),
+    1,
+    'el menú tiene que andar sin las funciones',
   );
 
   igual(errores, [], 'hubo errores de JavaScript');
