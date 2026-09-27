@@ -1,0 +1,15 @@
+# Nada de esto va al repo
+node_modules/
+.DS_Store
+*.log
+
+# Deno
+deno.lock
+vendor/
+
+# Configuración local con las claves del proyecto de Supabase.
+# config.js SÍ se versiona (la clave publishable es pública por diseño);
+# esto es para pruebas locales contra otro proyecto.
+config.local.js
+.env
+.env.*

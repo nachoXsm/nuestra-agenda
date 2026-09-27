@@ -1,0 +1,37 @@
+# Configuración del proyecto de Supabase.
+#
+# Lo importante de este archivo es el verify_jwt de ics-feed. Si queda en true,
+# el calendario del celular no puede suscribirse: los clientes de calendario no
+# saben mandar un JWT. La autenticación de ese endpoint es el token del link.
+
+project_id = "nuestra-agenda"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enable_signup = true
+# El hogar se comparte con un código de 6 caracteres, no por mail, así que no
+# hace falta que Supabase mande nada para empezar a usar la app.
+enable_confirmations = false
+
+[functions.chef-ia]
+verify_jwt = true
+
+[functions.ics-proxy]
+# Con JWT: así el proxy solo lo usan los usuarios de la app y no queda abierto.
+verify_jwt = true
+
+[functions.ics-feed]
+# Público a propósito: lo consume el calendario del celular, que no manda JWT.
+# Lo que protege el feed es el token del hogar (ag_hogares.feed_token).
+verify_jwt = false

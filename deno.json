@@ -1,0 +1,18 @@
+{
+  "//": "Solo para desarrollo: las Edge Functions las corre Supabase con su propio runtime.",
+  "tasks": {
+    "test": "deno test --allow-net --allow-env --allow-read --allow-sys supabase/functions/",
+    "check": "deno check supabase/functions/chef-ia/index.ts supabase/functions/ics-proxy/index.ts supabase/functions/ics-feed/index.ts",
+    "lint": "deno lint supabase/functions/",
+    "fmt": "deno fmt --check supabase/functions/"
+  },
+  "fmt": {
+    "singleQuote": true,
+    "lineWidth": 90
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
