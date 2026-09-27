@@ -69,6 +69,13 @@ Tiene que decir *Success*. Van a aparecer avisos tipo `NOTICE: ... does not
 exist, skipping`: son normales, el script está escrito para poder correrse de
 nuevo sin romper nada.
 
+### Comprobar que quedó bien
+
+Pegá [`supabase/verificar.sql`](supabase/verificar.sql) en el SQL Editor y dale
+Run. Es solo de lectura y te devuelve seis filas: las tablas, la seguridad, las
+políticas, las funciones, y que Nuestras Finanzas siga entera con sus datos.
+Todo tiene que dar ✅.
+
 Esto crea las tablas, las políticas de seguridad (cada hogar solo ve lo suyo) y
 las funciones que usa la app.
 
