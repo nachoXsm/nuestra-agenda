@@ -157,6 +157,9 @@ export const CONFIG = {
 };
 ```
 
+> **En este repo ya está cargado** con el proyecto de Nuestras Finanzas. Solo
+> hay que tocarlo si algún día cambiás de proyecto.
+
 **Nunca pongas ahí la `service_role`.** Esa saltea toda la seguridad del esquema
 y da acceso completo a los datos. La `anon` es pública por diseño: viaja en
 cualquier app web, y lo que protege los datos es el RLS que creaste en el paso 2.
