@@ -44,5 +44,17 @@ psql -q -f "$RAIZ/supabase/schema.sql" >/dev/null
 echo "→ schema.sql (segunda pasada — tiene que ser idempotente)"
 psql -q -f "$RAIZ/supabase/schema.sql" >/dev/null
 
+echo "→ Convivencia: se arma una app ajena con datos ANTES de la agenda"
+PGOPTIONS="" command psql -h "$D/run" -p "$PUERTO" -U postgres -v ON_ERROR_STOP=1 -q \
+  -f "$RAIZ/supabase/tests/test_convivencia.sql"
+
+echo "→ schema.sql encima de la app ajena (dos veces)"
+psql -q -f "$RAIZ/supabase/schema.sql" >/dev/null
+psql -q -f "$RAIZ/supabase/schema.sql" >/dev/null
+
+echo "→ Convivencia: verificar que no cambió nada de la app ajena"
+PGOPTIONS="" command psql -h "$D/run" -p "$PUERTO" -U postgres -v ON_ERROR_STOP=1 -q \
+  -f "$RAIZ/supabase/tests/test_convivencia_verificar.sql"
+
 echo "→ Pruebas de RLS"
 PGOPTIONS="" command psql -h "$D/run" -p "$PUERTO" -U postgres -v ON_ERROR_STOP=1 -q -f "$RAIZ/supabase/tests/test_rls.sql"

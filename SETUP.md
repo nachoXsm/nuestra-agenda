@@ -32,9 +32,16 @@ Lo único que comparten de verdad es el espacio en disco y las cuotas del plan
 gratuito. Una agenda familiar ocupa unos pocos megabytes por año, así que no es
 un problema.
 
-> Correr el `schema.sql` en un proyecto que ya tiene datos es seguro: solo crea
-> cosas que empiezan con `ag_`, y no borra, modifica ni toca ninguna tabla que
-> ya exista.
+> **Supabase te va a avisar que el script tiene operaciones destructivas.** Es
+> verdad que las tiene: son varios `drop ... if exists`, y todos apuntan a
+> objetos `ag_*` que el mismo script crea. No hay ni un `drop table`, ni un
+> `truncate`, ni un `delete` sobre nada ajeno.
+>
+> No hace falta que me creas: hay una prueba que lo verifica.
+> `supabase/tests/test_convivencia.sql` arma una app ajena completa —tablas,
+> datos, índices, triggers, políticas, vistas y funciones—, le corre el
+> `schema.sql` por encima dos veces, y compara objeto por objeto y dato por
+> dato. Si algo se moviera, falla. Corre en cada push.
 
 ### Opción B: un proyecto nuevo
 

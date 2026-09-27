@@ -143,7 +143,8 @@ Tres capas, todas corren sin servicios de afuera: ni Supabase, ni claves de API,
 ni red. También corren solas en cada push (`.github/workflows/pruebas.yml`).
 
 ```bash
-# 50 asserts: el esquema y las políticas RLS, contra un Postgres de verdad
+# 60 asserts: el esquema, el RLS y la convivencia con otra app en el mismo
+# proyecto, todo contra un Postgres de verdad
 ./supabase/tests/run.sh
 
 # 179 pruebas: las funciones y las librerías del frontend
@@ -156,6 +157,9 @@ node pruebas/app.test.mjs
 Lo que cubren:
 
 - que un hogar no vea absolutamente nada del otro (RLS, sobre Postgres);
+- que instalar el esquema sobre un proyecto de Supabase que ya tiene otra app
+  no le toque ni un objeto ni un dato — se arma una app ajena entera, se le
+  corre el `schema.sql` encima y se compara todo;
 - que el `.ics` que se publica sea válido, verificado con ICAL.js en vez de
   comparando texto — un `.ics` mal armado no da error, simplemente el celular no
   muestra nada;
