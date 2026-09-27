@@ -448,7 +448,7 @@ export async function chefChat(mensajes, contexto) {
   return r.respuesta;
 }
 
-export async function chefMenu({ contexto, desde, dias, momentos, instruccion }) {
+export function chefMenu({ contexto, desde, dias, momentos, instruccion }) {
   return llamarChef({ modo: 'menu', contexto, desde, dias, momentos, instruccion });
 }
 

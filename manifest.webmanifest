@@ -1,0 +1,55 @@
+{
+  "id": "./",
+  "name": "Nuestra Agenda",
+  "short_name": "Agenda",
+  "description": "La agenda de la familia y el menú de la semana, en un solo lugar.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "categories": ["productivity", "lifestyle", "food"],
+  "shortcuts": [
+    {
+      "name": "Anotar algo",
+      "short_name": "Anotar",
+      "url": "./#agenda",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Menú de la semana",
+      "short_name": "Menú",
+      "url": "./#menu",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lista de compras",
+      "short_name": "Compras",
+      "url": "./#compras",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

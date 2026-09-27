@@ -1,0 +1,64 @@
+name: Publicar en GitHub Pages
+
+# Publica la app en cada push a main. No hay paso de build: son archivos
+# estáticos y se suben tal cual están en el repo.
+on:
+  push:
+    branches: [main]
+  # También se puede disparar a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Si se pushea dos veces seguidas, gana el último; no se cancela el deploy a
+# mitad de camino para no dejar el sitio en un estado raro.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar que config.js esté cargado
+        # Si alguien publica con los valores de ejemplo, la app abre pidiendo
+        # los datos a mano en cada teléfono. Mejor avisarlo acá.
+        run: |
+          if grep -q 'TU-PROYECTO\|TU-CLAVE' config.js; then
+            echo "::warning file=config.js::config.js todavía tiene los valores de ejemplo. La app va a pedir la URL y la clave de Supabase en cada dispositivo. Cargalos en config.js para que entren directo."
+          fi
+
+      - name: Armar el paquete
+        run: |
+          mkdir -p _sitio
+          # Se copia todo menos lo que no va al sitio publicado.
+          rsync -a ./ _sitio/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'supabase' \
+            --exclude 'pruebas' \
+            --exclude 'docs' \
+            --exclude 'node_modules' \
+            --exclude 'deno.json' \
+            --exclude '*.md'
+          # Sin esto, Pages pasa el sitio por Jekyll y se come las carpetas que
+          # empiezan con guion bajo.
+          touch _sitio/.nojekyll
+          ls -la _sitio
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _sitio
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

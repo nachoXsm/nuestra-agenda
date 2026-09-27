@@ -1,0 +1,1433 @@
+/* ===========================================================================
+   Nuestra Agenda — estilos
+   Mobile primero: se usa desde el celular, con una mano, muchas veces por día.
+   Tema oscuro por defecto y claro para el sol de la calle.
+   =========================================================================== */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  /* Violeta y naranja, bien distinto del verde agua de Nuestras Finanzas:
+     son dos apps del mismo teléfono y no tienen que confundirse. */
+  --primary: #8b7cff;
+  --primary-fuerte: #6f5cff;
+  --primary-suave: rgba(139, 124, 255, 0.14);
+  --calido: #ff9f68;
+  --acento: #ffd166;
+  --ok: #3ddc97;
+  --peligro: #ff6b6b;
+
+  --bg: #0b1020;
+  --bg2: #111832;
+  --card: #151d38;
+  --card2: #1b2447;
+  --texto: #f2f4ff;
+  --suave: #9aa6cf;
+  --borde: rgba(255, 255, 255, 0.08);
+  --sombra: 0 16px 40px rgba(0, 0, 0, 0.4);
+  --sombra-chica: 0 4px 14px rgba(0, 0, 0, 0.25);
+
+  --r: 18px;
+  --r-chico: 12px;
+  --ancho: 480px;
+
+  /* Colores por categoría de evento. */
+  --cat-familia: #8b7cff;
+  --cat-hijo: #ff9f68;
+  --cat-pareja: #ff6b9d;
+  --cat-trabajo: #5bc8ff;
+  --cat-salud: #3ddc97;
+  --cat-colegio: #ffd166;
+  --cat-cumple: #ff6b6b;
+  --cat-tramite: #a9b1d6;
+  --cat-otro: #9aa6cf;
+
+  color-scheme: dark;
+}
+
+:root[data-tema='claro'] {
+  --primary-suave: rgba(111, 92, 255, 0.1);
+  --bg: #f4f5fb;
+  --bg2: #ffffff;
+  --card: #ffffff;
+  --card2: #f1f3fb;
+  --texto: #14182c;
+  --suave: #5f678c;
+  --borde: rgba(16, 20, 40, 0.1);
+  --sombra: 0 12px 30px rgba(24, 30, 60, 0.1);
+  --sombra-chica: 0 2px 10px rgba(24, 30, 60, 0.07);
+  color-scheme: light;
+}
+
+/* Quien no eligió tema sigue al sistema. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-tema='oscuro']):not([data-tema='claro']) {
+    --primary-suave: rgba(111, 92, 255, 0.1);
+    --bg: #f4f5fb;
+    --bg2: #ffffff;
+    --card: #ffffff;
+    --card2: #f1f3fb;
+    --texto: #14182c;
+    --suave: #5f678c;
+    --borde: rgba(16, 20, 40, 0.1);
+    --sombra: 0 12px 30px rgba(24, 30, 60, 0.1);
+    --sombra-chica: 0 2px 10px rgba(24, 30, 60, 0.07);
+    color-scheme: light;
+  }
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--texto);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* El foco tiene que verse: se navega con teclado en la compu. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.oculto {
+  display: none !important;
+}
+
+/* Mayúscula solo en la primera letra. text-transform: capitalize pone una en
+   cada palabra y deja cosas como "Domingo 27 De Septiembre". */
+.cap::first-letter {
+  text-transform: uppercase;
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- estructura */
+
+#app {
+  max-width: var(--ancho);
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  position: relative;
+}
+
+.cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--borde);
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+}
+
+.cabecera h1 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cabecera .sub {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--suave);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+main {
+  flex: 1;
+  padding: 16px 16px 24px;
+  /* Espacio para que la barra de abajo no tape el último elemento. */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+
+/* -------------------------------------------------------------- barra de abajo */
+
+.barra {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--ancho);
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg2) 94%, transparent);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--borde);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+
+.barra button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 2px;
+  border-radius: var(--r-chico);
+  color: var(--suave);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.barra button .ico {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.barra button[aria-current='page'] {
+  color: var(--primary);
+  background: var(--primary-suave);
+}
+
+/* ------------------------------------------------------------------ tarjetas */
+
+.tarjeta {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: var(--r);
+  padding: 16px;
+  box-shadow: var(--sombra-chica);
+}
+
+.tarjeta + .tarjeta {
+  margin-top: 12px;
+}
+
+.tarjeta.plana {
+  box-shadow: none;
+  background: var(--card2);
+}
+
+.seccion {
+  margin-top: 22px;
+}
+
+.seccion:first-child {
+  margin-top: 0;
+}
+
+.seccion > h2 {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--suave);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seccion > h2 .contador {
+  background: var(--card2);
+  color: var(--suave);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+
+/* -------------------------------------------------------------------- botones */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 18px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  background: var(--card2);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  transition: transform 0.12s, filter 0.15s, background 0.15s;
+  /* Nunca menos de 44px de alto: se toca con el pulgar. */
+  min-height: 46px;
+  text-align: center;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primario {
+  background: linear-gradient(135deg, var(--primary), var(--primary-fuerte));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 22px rgba(111, 92, 255, 0.32);
+}
+
+.btn.calido {
+  background: linear-gradient(135deg, var(--calido), #ff7d4d);
+  color: #2a1405;
+  border-color: transparent;
+}
+
+.btn.peligro {
+  color: var(--peligro);
+  border-color: color-mix(in srgb, var(--peligro) 40%, transparent);
+}
+
+.btn.fantasma {
+  background: transparent;
+}
+
+.btn.ancho {
+  width: 100%;
+}
+
+.btn.chico {
+  padding: 8px 12px;
+  min-height: 38px;
+  font-size: 0.8rem;
+  border-radius: 11px;
+}
+
+.btn-fila {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-fila > * {
+  flex: 1;
+}
+
+/* Botón flotante para cargar algo nuevo. */
+.fab {
+  position: fixed;
+  right: max(16px, calc(50% - var(--ancho) / 2 + 16px));
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  z-index: 45;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-fuerte));
+  color: #fff;
+  font-size: 1.7rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 28px rgba(111, 92, 255, 0.45);
+  transition: transform 0.15s;
+}
+
+.fab:active {
+  transform: scale(0.92);
+}
+
+/* ---------------------------------------------------------------- formularios */
+
+.campo {
+  margin-bottom: 14px;
+}
+
+.campo > label {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--suave);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.campo .ayuda {
+  font-size: 0.76rem;
+  color: var(--suave);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='date'],
+input[type='time'],
+input[type='number'],
+input[type='url'],
+select,
+textarea {
+  width: 100%;
+  background: var(--card2);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-chico);
+  padding: 13px 14px;
+  /* 16px como mínimo: con menos, iOS hace zoom al enfocar el campo. */
+  font-size: 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--card);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--suave);
+  opacity: 0.7;
+}
+
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--suave) 50%),
+    linear-gradient(135deg, var(--suave) 50%, transparent 50%);
+  background-position: calc(100% - 19px) calc(50% + 1px), calc(100% - 14px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+
+/* El calendario nativo de los campos de fecha en tema oscuro. */
+:root:not([data-tema='claro']) input[type='date']::-webkit-calendar-picker-indicator,
+:root:not([data-tema='claro']) input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+}
+
+.fila {
+  display: flex;
+  gap: 10px;
+}
+
+.fila > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  cursor: pointer;
+}
+
+.switch span {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.switch input {
+  appearance: none;
+  width: 46px;
+  height: 27px;
+  border-radius: 999px;
+  background: var(--card2);
+  border: 1px solid var(--borde);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--suave);
+  transition: transform 0.18s, background 0.18s;
+}
+
+.switch input:checked {
+  background: var(--primary);
+  border-color: transparent;
+}
+
+.switch input:checked::after {
+  transform: translateX(19px);
+  background: #fff;
+}
+
+/* ------------------------------------------------------------------- chips */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chips.scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Se sale del padding del main para que el scroll llegue al borde. */
+  margin: 0 -16px;
+  padding: 2px 16px;
+}
+
+.chips.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--card2);
+  border: 1px solid var(--borde);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--suave);
+  white-space: nowrap;
+  flex: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.chip[aria-pressed='true'],
+.chip.activo {
+  background: var(--primary-suave);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chip.mini {
+  padding: 3px 9px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.chip.temporada {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 42%, transparent);
+  color: var(--ok);
+}
+
+.chip.fuera {
+  background: color-mix(in srgb, var(--acento) 15%, transparent);
+  border-color: color-mix(in srgb, var(--acento) 40%, transparent);
+  color: var(--acento);
+}
+
+/* --------------------------------------------------------------- calendario */
+
+.mes-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.mes-nav .titulo {
+  flex: 1;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1rem;
+  /* Sin capitalize: en "21 al 27 de sep" pondría mayúscula en "Al" y en "De".
+     La primera letra la pone conMayuscula() al armar el texto. */
+}
+
+.mes-nav button {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--card2);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grilla {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.grilla .dow {
+  text-align: center;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--suave);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding-bottom: 4px;
+}
+
+.dia {
+  aspect-ratio: 1;
+  border-radius: 11px;
+  background: var(--card);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--texto);
+  position: relative;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.dia.otro-mes {
+  color: var(--suave);
+  opacity: 0.4;
+  background: transparent;
+}
+
+.dia.hoy {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.dia[aria-pressed='true'] {
+  background: var(--primary);
+  color: #fff;
+  border-color: transparent;
+}
+
+.dia[aria-pressed='true'].hoy {
+  color: #fff;
+}
+
+.dia .puntos {
+  display: flex;
+  gap: 2.5px;
+  height: 5px;
+  align-items: center;
+}
+
+.dia .punto {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.dia[aria-pressed='true'] .punto {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+.dia .comida {
+  position: absolute;
+  bottom: 3px;
+  right: 4px;
+  font-size: 0.5rem;
+  opacity: 0.85;
+}
+
+/* --------------------------------------------------------------- eventos */
+
+.evento {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--r-chico);
+  padding: 12px 13px;
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s;
+}
+
+.evento + .evento {
+  margin-top: 8px;
+}
+
+.evento:active {
+  background: var(--card2);
+}
+
+.evento.hecho {
+  opacity: 0.5;
+}
+
+.evento.hecho .titulo {
+  text-decoration: line-through;
+}
+
+.evento .hora {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--suave);
+  min-width: 44px;
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.evento .cuerpo {
+  flex: 1;
+  min-width: 0;
+}
+
+.evento .titulo {
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.evento .detalle {
+  font-size: 0.78rem;
+  color: var(--suave);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.evento .tilde {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  border: 2px solid var(--borde);
+  color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.evento.hecho .tilde {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #06301f;
+}
+
+.persona-punto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+
+/* ------------------------------------------------------------------- menú */
+
+.dia-menu {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: var(--r);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+
+.dia-menu.es-hoy {
+  border-color: var(--primary);
+}
+
+.dia-menu > header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.dia-menu > header .dow {
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+
+.dia-menu > header .num {
+  font-size: 0.74rem;
+  color: var(--suave);
+  font-weight: 700;
+}
+
+.dia-menu > header .agenda-aviso {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--calido);
+  font-weight: 700;
+  text-align: right;
+}
+
+.comida-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--r-chico);
+  background: var(--card2);
+  width: 100%;
+  text-align: left;
+  border: 1px dashed transparent;
+}
+
+.comida-slot + .comida-slot {
+  margin-top: 6px;
+}
+
+.comida-slot.vacia {
+  border-color: var(--borde);
+  background: transparent;
+  color: var(--suave);
+}
+
+.comida-slot .momento {
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--suave);
+  min-width: 52px;
+}
+
+.comida-slot .plato {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.comida-slot .plato .meta {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--suave);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ----------------------------------------------------------------- compras */
+
+.compra {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-chico);
+  width: 100%;
+  text-align: left;
+}
+
+.compra + .compra {
+  margin-top: 6px;
+}
+
+.compra.listo {
+  opacity: 0.45;
+}
+
+.compra.listo .nombre {
+  text-decoration: line-through;
+}
+
+.compra .caja {
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  border: 2px solid var(--borde);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  color: transparent;
+}
+
+.compra.listo .caja {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #06301f;
+}
+
+.compra .nombre {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.compra .cant {
+  font-size: 0.76rem;
+  color: var(--suave);
+  font-weight: 700;
+}
+
+/* -------------------------------------------------------------------- chat */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding-bottom: 8px;
+}
+
+.burbuja {
+  max-width: 88%;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  font-size: 0.91rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.burbuja.yo {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--primary), var(--primary-fuerte));
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+
+.burbuja.chef {
+  align-self: flex-start;
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-bottom-left-radius: 6px;
+}
+
+.burbuja strong {
+  font-weight: 800;
+}
+
+.chat-entrada {
+  position: sticky;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 0 0;
+  background: linear-gradient(to top, var(--bg) 62%, transparent);
+}
+
+.chat-entrada textarea {
+  min-height: 46px;
+  max-height: 130px;
+  padding: 12px 14px;
+  border-radius: 22px;
+}
+
+.chat-entrada button {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-fuerte));
+  color: #fff;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------- hoja emergente */
+
+.velo {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(3, 6, 18, 0.62);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: aparecer 0.18s ease-out;
+}
+
+.hoja {
+  width: 100%;
+  max-width: var(--ancho);
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg2);
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--borde);
+  padding: 8px 18px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: var(--sombra);
+  animation: subir 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hoja .manija {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--borde);
+  margin: 8px auto 14px;
+}
+
+.hoja h2 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.hoja .bajada {
+  font-size: 0.82rem;
+  color: var(--suave);
+  margin-bottom: 16px;
+  line-height: 1.45;
+}
+
+.hoja .acciones {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.hoja .acciones > * {
+  flex: 1;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes subir {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* Quien pidió menos movimiento, menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -------------------------------------------------------------------- avisos */
+
+.aviso {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 120;
+  background: var(--card);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 12px 17px;
+  border-radius: 14px;
+  box-shadow: var(--sombra);
+  font-size: 0.87rem;
+  font-weight: 600;
+  max-width: calc(var(--ancho) - 32px);
+  width: max-content;
+  text-align: center;
+  animation: subirAviso 0.22s ease-out;
+}
+
+.aviso.mal {
+  border-color: color-mix(in srgb, var(--peligro) 55%, transparent);
+  color: var(--peligro);
+}
+
+.aviso.bien {
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+}
+
+@keyframes subirAviso {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+}
+
+/* ------------------------------------------------------------------- estados */
+
+.vacio {
+  text-align: center;
+  padding: 34px 20px;
+  color: var(--suave);
+}
+
+.vacio .emoji {
+  font-size: 2.2rem;
+  display: block;
+  margin-bottom: 10px;
+  opacity: 0.85;
+}
+
+.vacio p {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.cargando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px;
+  color: var(--suave);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ruedita {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--borde);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+  flex: none;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Barras de carga con la forma del contenido que viene. */
+.hueso {
+  background: linear-gradient(
+    90deg,
+    var(--card) 25%,
+    var(--card2) 50%,
+    var(--card) 75%
+  );
+  background-size: 200% 100%;
+  animation: brillo 1.3s infinite;
+  border-radius: var(--r-chico);
+  height: 62px;
+}
+
+.hueso + .hueso {
+  margin-top: 8px;
+}
+
+@keyframes brillo {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ------------------------------------------------------- pantalla de entrada */
+
+.entrada {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 32px 22px calc(32px + env(safe-area-inset-bottom));
+  max-width: var(--ancho);
+  margin: 0 auto;
+}
+
+.entrada .marca {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.entrada .marca .logo {
+  font-size: 2.6rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.entrada .marca h1 {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+
+.entrada .marca p {
+  color: var(--suave);
+  font-size: 0.87rem;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.entrada .cambiar {
+  text-align: center;
+  margin-top: 18px;
+  font-size: 0.85rem;
+  color: var(--suave);
+}
+
+.entrada .cambiar button {
+  color: var(--primary);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.error-campo {
+  color: var(--peligro);
+  font-size: 0.8rem;
+  margin-top: 8px;
+  font-weight: 600;
+  min-height: 1.1em;
+}
+
+/* Código de hogar: se lee y se dicta por teléfono, así que va grande. */
+.codigo {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 7px;
+  text-align: center;
+  padding: 15px;
+  background: var(--card2);
+  border: 1px dashed var(--primary);
+  border-radius: var(--r-chico);
+  color: var(--primary);
+  /* El espaciado deja un hueco visual a la derecha: se compensa. */
+  text-indent: 7px;
+  user-select: all;
+}
+
+input.codigo-entrada {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 1.4rem;
+  letter-spacing: 6px;
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: 800;
+  text-indent: 6px;
+}
+
+/* --------------------------------------------------------------------- misc */
+
+.lista-ajustes {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.lista-ajustes button,
+.lista-ajustes .fila-ajuste {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--borde);
+  color: var(--texto);
+}
+
+.lista-ajustes > *:last-child {
+  border-bottom: none;
+}
+
+.lista-ajustes .ico {
+  font-size: 1.1rem;
+  width: 24px;
+  text-align: center;
+  flex: none;
+}
+
+.lista-ajustes .flecha {
+  margin-left: auto;
+  color: var(--suave);
+  font-size: 0.9rem;
+}
+
+.lista-ajustes .valor {
+  margin-left: auto;
+  color: var(--suave);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.persona-fila {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 0;
+}
+
+.persona-fila + .persona-fila {
+  border-top: 1px solid var(--borde);
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex: none;
+  border: 2px solid transparent;
+}
+
+.persona-fila .nombre {
+  flex: 1;
+  font-weight: 700;
+  font-size: 0.93rem;
+}
+
+.persona-fila .rol {
+  font-size: 0.72rem;
+  color: var(--suave);
+  font-weight: 600;
+  display: block;
+}
+
+.link-feed {
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  word-break: break-all;
+  background: var(--card2);
+  padding: 11px 12px;
+  border-radius: var(--r-chico);
+  border: 1px solid var(--borde);
+  color: var(--suave);
+  line-height: 1.45;
+}
+
+.paso {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--suave);
+}
+
+.paso + .paso {
+  margin-top: 11px;
+}
+
+.paso .n {
+  flex: none;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--primary-suave);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.receta-cuerpo p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--suave);
+}
+
+.ingredientes {
+  list-style: none;
+  margin-top: 10px;
+}
+
+.ingredientes li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.ingredientes li:last-child {
+  border-bottom: none;
+}
+
+.ingredientes .cant {
+  margin-left: auto;
+  color: var(--suave);
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex: none;
+}
+
+/* En pantalla grande se centra y se despega de los bordes. */
+@media (min-width: 560px) {
+  #app {
+    box-shadow: var(--sombra);
+    border-left: 1px solid var(--borde);
+    border-right: 1px solid var(--borde);
+  }
+}

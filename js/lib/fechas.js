@@ -191,6 +191,12 @@ export function fechaHumana(fecha, referencia = hoy()) {
     : texto;
 }
 
+/** Mayúscula en la primera letra y nada más. */
+export function conMayuscula(texto) {
+  const t = String(texto ?? '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /** "martes 29 de septiembre". */
 export function fechaLarga(fecha) {
   const { mes, dia } = partes(fecha);

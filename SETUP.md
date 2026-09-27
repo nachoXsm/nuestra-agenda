@@ -1,0 +1,209 @@
+# Poner a andar Nuestra Agenda
+
+Unos 15 minutos. No hace falta instalar nada en la computadora: se hace todo
+desde el navegador, con las cuentas de GitHub y Supabase que ya tenés.
+
+---
+
+## 1. Crear el proyecto de Supabase
+
+1. Entrá a [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
+2. Nombre: `nuestra-agenda`. Región: **South America (São Paulo)**, que es la
+   más cerca de acá.
+3. Guardá la contraseña de la base que te muestra: no la vas a necesitar para
+   esto, pero sí si algún día querés entrar por SQL desde afuera.
+4. Esperá un par de minutos a que termine de levantarse.
+
+El plan gratuito alcanza y sobra: dos personas cargando eventos y menús no
+llegan ni cerca de los límites.
+
+---
+
+## 2. Crear las tablas
+
+1. En el proyecto, andá a **SQL Editor** → **New query**.
+2. Abrí [`supabase/schema.sql`](supabase/schema.sql) de este repo, copiá **todo**
+   y pegalo.
+3. **Run**.
+
+Tiene que decir *Success*. Van a aparecer avisos tipo `NOTICE: ... does not
+exist, skipping`: son normales, el script está escrito para poder correrse de
+nuevo sin romper nada.
+
+Esto crea las tablas, las políticas de seguridad (cada hogar solo ve lo suyo) y
+las funciones que usa la app.
+
+---
+
+## 3. Configurar el ingreso
+
+En **Authentication** → **Sign In / Providers**:
+
+- **Email** tiene que estar prendido.
+- Apagá **Confirm email**. Sin apagarlo, Supabase manda un mail de confirmación
+  y su servidor de prueba tiene un límite muy bajo de envíos, así que lo más
+  probable es que no llegue. Como el hogar se comparte con un código y no por
+  mail, la confirmación no aporta nada acá.
+
+> **Cuando los dos ya tengan cuenta, volvé y apagá el registro.** En
+> **Authentication** → **Sign In / Providers** → **Allow new users to sign up**,
+> en off. Desde ese momento nadie más puede crearse una cuenta en tu proyecto.
+> Esto es lo que conviene hacer, porque la clave pública viaja en el código de
+> la app y cualquiera que la vea podría registrarse (no vería tus datos, por el
+> RLS, pero ocuparía lugar y sería ruido).
+
+---
+
+## 4. Subir las funciones
+
+Son tres. Se pueden subir desde el navegador, sin instalar nada.
+
+En **Edge Functions** → **Deploy a new function** → **Via Editor**:
+
+| Nombre       | Qué pegar                                     |
+|--------------|-----------------------------------------------|
+| `chef-ia`    | `supabase/functions/chef-ia/index.ts`         |
+| `ics-proxy`  | `supabase/functions/ics-proxy/index.ts`       |
+| `ics-feed`   | `supabase/functions/ics-feed/index.ts`        |
+
+Las tres importan archivos de `supabase/functions/_shared/`. En el editor del
+navegador hay un botón para agregar archivos a la función: creá la carpeta
+`_shared` dentro de cada una y pegá los archivos que use:
+
+- `chef-ia` necesita `cors.ts`, `groq.ts` y `menu-sanear.ts`
+- `ics-proxy` necesita `cors.ts` y `url-segura.ts`
+- `ics-feed` necesita `feed.ts` e `ics-build.ts`
+
+> Si preferís hacerlo por consola y tenés el CLI instalado, es más corto:
+> `supabase functions deploy chef-ia ics-proxy ics-feed` desde la raíz del repo.
+> El `supabase/config.toml` ya trae la configuración correcta.
+
+### Lo que hay que tocar sí o sí en `ics-feed`
+
+En **Edge Functions** → `ics-feed` → **Details**, poné **Verify JWT** en **off**.
+
+Sin esto el calendario del celular no se puede suscribir: los clientes de
+calendario no saben mandar un token de sesión. Lo que protege ese endpoint es el
+token secreto que va en el link.
+
+Las otras dos quedan con Verify JWT en **on**, que es el valor por defecto.
+
+---
+
+## 5. La clave del agente de IA
+
+El agente usa Groq, que tiene un plan gratuito más que suficiente para esto.
+
+1. Entrá a [console.groq.com/keys](https://console.groq.com/keys) y creá una
+   API key.
+2. En Supabase: **Edge Functions** → **Secrets** → **Add new secret**.
+   - Nombre: `GROQ_KEY`
+   - Valor: la clave.
+
+Opcional, pero recomendado cuando ya sepas la dirección de tu app: agregá otro
+secreto `ORIGENES_PERMITIDOS` con el valor
+`https://TU-USUARIO.github.io`. Con eso las funciones solo responden a tu sitio.
+
+---
+
+## 6. Conectar la app
+
+En **Project Settings** → **Data API** copiá:
+
+- **Project URL** → algo como `https://abcdefgh.supabase.co`
+- **anon / publishable key** → la que dice `anon` o `publishable`
+
+Editá [`config.js`](config.js) y pegá los dos valores:
+
+```js
+export const CONFIG = {
+  SUPABASE_URL: 'https://abcdefgh.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_...',
+};
+```
+
+**Nunca pongas ahí la `service_role`.** Esa saltea toda la seguridad del esquema
+y da acceso completo a los datos. La `anon` es pública por diseño: viaja en
+cualquier app web, y lo que protege los datos es el RLS que creaste en el paso 2.
+
+> Si preferís no escribir las claves en el código, dejá `config.js` como está: la
+> app abre una pantalla para cargarlas a mano y las guarda en ese navegador. La
+> contra es que hay que hacerlo en cada teléfono.
+
+---
+
+## 7. Publicar con GitHub Pages
+
+1. Subí los cambios al repo.
+2. En GitHub: **Settings** → **Pages** → **Source**: **GitHub Actions**.
+3. Listo. El workflow que ya está en el repo publica en cada push a `main`.
+
+La app queda en `https://TU-USUARIO.github.io/nuestra-agenda/`.
+
+> **El repositorio tiene que ser público** para que GitHub Pages funcione con
+> una cuenta gratuita (con GitHub Pro también anda en privado). Publicar el
+> código no expone tus datos: lo único que queda a la vista es la URL del
+> proyecto y la clave pública, y los datos los protege el RLS. Aun así, hacé el
+> paso de apagar el registro del punto 3.
+
+---
+
+## 8. Instalarla en el celular
+
+Abrí la dirección en el celular y:
+
+- **Android (Chrome):** menú de tres puntos → *Agregar a la pantalla principal*.
+- **iPhone (Safari):** compartir → *Agregar a pantalla de inicio*.
+
+Queda como una app más, con su ícono y sin la barra del navegador.
+
+---
+
+## 9. Empezar a usarla
+
+1. Creá tu cuenta con tu mail.
+2. **Crear nuestro hogar**, ponele nombre, elegí tu color.
+3. Andá a **Más** → **Invitar** y pasale el código de 6 letras a tu pareja. Ella
+   se crea su cuenta y entra con ese código.
+4. **Más** → **Sumar a alguien de la familia** para cargar a tu hijo. No necesita
+   cuenta: es para poder decir de quién es cada evento.
+5. **Más** → **Suscribir el calendario del teléfono**. Hacelo en los dos
+   celulares. **Este es el paso que hace que la app sirva para no olvidarse las
+   cosas**: a partir de acá los recordatorios los da el calendario del sistema.
+
+---
+
+## Si algo no anda
+
+**"No se pudieron traer los datos"** — falta correr el `schema.sql` del paso 2,
+o la URL o la clave están mal en `config.js`.
+
+**No llega el mail de confirmación** — apagá *Confirm email* (paso 3). El
+servidor de prueba de Supabase casi no manda mails.
+
+**El agente dice "Falta el secreto GROQ_KEY"** — paso 5. Después de agregar un
+secreto hay que volver a desplegar la función para que lo tome.
+
+**El calendario del celular no trae nada** — casi siempre es el *Verify JWT* de
+`ics-feed`, que quedó en on (paso 4). Para probarlo, pegá el link del feed en el
+navegador: tiene que bajar un archivo que arranca con `BEGIN:VCALENDAR`. Si en
+cambio ves un error de autorización, es eso.
+
+**El calendario tarda en actualizarse** — es así: los calendarios suscritos se
+refrescan cuando el teléfono quiere, y Google puede tardar varias horas. Para
+algo de hoy mismo, usá *Agregar al calendario del celular* desde el evento.
+
+**"Eso no es un calendario" al importar** — el link pide login. Buscá en el sitio
+la opción de *suscribirse* o *exportar .ics*, que da un link público.
+
+---
+
+## Si querés tocar el código
+
+Las pruebas corren sin ningún servicio de afuera:
+
+```bash
+./supabase/tests/run.sh          # el esquema y el RLS, sobre un Postgres real
+deno task test                   # las funciones y las librerías
+node pruebas/app.test.mjs        # la app entera, en un Chromium real
+```

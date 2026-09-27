@@ -1,0 +1,390 @@
+// ============================================================================
+//  El estado de la app: lo que hay cargado y quién quiere enterarse si cambia.
+//
+//  Un objeto y una lista de suscriptores. No hace falta más: las vistas se
+//  vuelven a pintar enteras cuando algo cambia, y en una pantalla de celular
+//  con unas decenas de filas eso es instantáneo.
+// ============================================================================
+import * as db from './lib/db.js';
+import { aFecha, diasEntre, hoy, ocurrencias, sumarDias, sumarMeses } from './lib/fechas.js';
+
+export const estado = {
+  // sesión
+  sesion: null,
+  hogar: null,
+  personas: [],
+  yo: null, // la fila de ag_personas del usuario actual
+
+  // datos
+  eventos: [],
+  menu: [],
+  compras: [],
+  preferencias: null,
+  calendarios: [],
+
+  // navegación
+  vista: 'hoy',
+  fechaElegida: hoy(),
+  mesVisible: null, // { anio, mes }
+  semanaVisible: null, // fecha de cualquier día de la semana
+
+  // banderas
+  cargando: true,
+  rango: null, // { desde, hasta } de lo que está cargado
+};
+
+const suscriptores = new Set();
+
+/** Se entera cuando cambia el estado. Devuelve la función para desuscribirse. */
+export function suscribir(fn) {
+  suscriptores.add(fn);
+  return () => suscriptores.delete(fn);
+}
+
+export function avisar() {
+  for (const fn of suscriptores) {
+    try {
+      fn(estado);
+    } catch (e) {
+      // Un suscriptor que falla no puede dejar sin avisar a los demás.
+      console.error('Un suscriptor falló al repintar', e);
+    }
+  }
+}
+
+/** Cambia el estado y avisa. */
+export function poner(cambios) {
+  Object.assign(estado, cambios);
+  avisar();
+}
+
+// ---------------------------------------------------------------------------
+//  Carga
+// ---------------------------------------------------------------------------
+
+const MESES_ATRAS = 3;
+const MESES_ADELANTE = 12;
+
+function rangoPorDefecto() {
+  const h = hoy();
+  return { desde: sumarMeses(h, -MESES_ATRAS), hasta: sumarMeses(h, MESES_ADELANTE) };
+}
+
+/**
+ * Carga todo lo del hogar. Se llama al entrar y cuando hace falta refrescar.
+ * El rango es amplio a propósito: una familia carga decenas de eventos, no
+ * miles, así que traer un año de una vez sale más barato que ir pidiendo de a
+ * pedazos cada vez que se cambia de mes.
+ */
+export async function cargarTodo() {
+  if (!estado.hogar) return;
+  const rango = estado.rango ?? rangoPorDefecto();
+
+  poner({ cargando: true });
+  try {
+    const [personas, eventos, menu, compras, preferencias, calendarios] = await Promise.all([
+      db.personas(estado.hogar.id),
+      db.eventos(estado.hogar.id, rango.desde, rango.hasta),
+      db.menu(estado.hogar.id, sumarDias(rango.desde, 0), rango.hasta),
+      db.compras(estado.hogar.id),
+      db.preferencias(estado.hogar.id),
+      db.calendarios(estado.hogar.id),
+    ]);
+
+    const miId = estado.sesion?.user?.id;
+    Object.assign(estado, {
+      personas,
+      yo: personas.find((p) => p.user_id === miId) ?? null,
+      eventos,
+      menu,
+      compras,
+      preferencias,
+      calendarios,
+      rango,
+    });
+  } finally {
+    poner({ cargando: false });
+  }
+}
+
+/** Vuelve a traer solo una parte, para después de guardar algo. */
+export async function recargar(que) {
+  if (!estado.hogar) return;
+  const id = estado.hogar.id;
+  const rango = estado.rango ?? rangoPorDefecto();
+
+  const tareas = {
+    eventos: () => db.eventos(id, rango.desde, rango.hasta).then((v) => ({ eventos: v })),
+    menu: () => db.menu(id, rango.desde, rango.hasta).then((v) => ({ menu: v })),
+    compras: () => db.compras(id).then((v) => ({ compras: v })),
+    personas: () =>
+      db.personas(id).then((v) => ({
+        personas: v,
+        yo: v.find((p) => p.user_id === estado.sesion?.user?.id) ?? null,
+      })),
+    preferencias: () => db.preferencias(id).then((v) => ({ preferencias: v })),
+    calendarios: () => db.calendarios(id).then((v) => ({ calendarios: v })),
+  };
+
+  const cuales = [].concat(que).filter((k) => tareas[k]);
+  const resultados = await Promise.all(cuales.map((k) => tareas[k]()));
+  poner(Object.assign({}, ...resultados));
+}
+
+/** Si se navegó fuera de lo cargado, se estira el rango y se trae de nuevo. */
+export async function asegurarRango(fecha) {
+  const r = estado.rango ?? rangoPorDefecto();
+  if (diasEntre(r.desde, fecha) >= 0 && diasEntre(fecha, r.hasta) >= 0) return;
+
+  estado.rango = {
+    desde: diasEntre(r.desde, fecha) < 0 ? sumarMeses(fecha, -2) : r.desde,
+    hasta: diasEntre(fecha, r.hasta) < 0 ? sumarMeses(fecha, 2) : r.hasta,
+  };
+  await recargar(['eventos', 'menu']);
+}
+
+// ---------------------------------------------------------------------------
+//  Tiempo real
+// ---------------------------------------------------------------------------
+
+let cortarEscucha = null;
+let relojRefresco = null;
+
+/**
+ * Escucha los cambios del hogar. Lo que carga uno le aparece al otro sin
+ * recargar, que es la mitad del sentido de una agenda compartida.
+ *
+ * Se agrupan los avisos: guardar un menú de 14 comidas dispara 14 eventos, y no
+ * tiene sentido recargar 14 veces.
+ */
+export function escuchar() {
+  cortarEscucha?.();
+  if (!estado.hogar) return;
+
+  const pendientes = new Set();
+
+  cortarEscucha = db.escucharHogar(estado.hogar.id, (tabla) => {
+    const mapa = {
+      ag_eventos: 'eventos',
+      ag_ocurrencias: 'eventos',
+      ag_menu: 'menu',
+      ag_compras: 'compras',
+      ag_personas: 'personas',
+    };
+    const que = mapa[tabla];
+    if (!que) return;
+
+    pendientes.add(que);
+    clearTimeout(relojRefresco);
+    relojRefresco = setTimeout(() => {
+      const lista = [...pendientes];
+      pendientes.clear();
+      recargar(lista).catch((e) => console.error('No se pudo refrescar', e));
+    }, 400);
+  });
+}
+
+export function dejarDeEscuchar() {
+  cortarEscucha?.();
+  cortarEscucha = null;
+  clearTimeout(relojRefresco);
+}
+
+// ---------------------------------------------------------------------------
+//  Consultas sobre lo cargado
+// ---------------------------------------------------------------------------
+
+export function persona(id) {
+  return estado.personas.find((p) => p.id === id) ?? null;
+}
+
+/** El estado de una fecha puntual de un evento: 'hecho', 'cancelado' o null. */
+function estadoOcurrencia(evento, fecha) {
+  return (evento.ag_ocurrencias ?? []).find((o) => o.fecha?.slice(0, 10) === fecha)?.estado ?? null;
+}
+
+/**
+ * Las veces que un evento cae en un rango, ya como instancias listas para
+ * mostrar. Una instancia es "este evento, este día": un evento semanal genera
+ * una instancia por semana, cada una con su propio estado de hecho.
+ */
+export function instanciasEnRango(desde, hasta, { incluirCanceladas = false } = {}) {
+  const salida = [];
+
+  for (const evento of estado.eventos) {
+    for (const fecha of ocurrencias(evento, desde, hasta)) {
+      const est = estadoOcurrencia(evento, fecha);
+      if (est === 'cancelado' && !incluirCanceladas) continue;
+
+      salida.push({
+        evento,
+        fecha,
+        // La hora sale del evento original; la fecha, de la ocurrencia.
+        hora: evento.todo_el_dia ? null : evento.inicio,
+        hecho: est === 'hecho',
+        cancelado: est === 'cancelado',
+        persona: evento.persona_id ? persona(evento.persona_id) : null,
+      });
+    }
+  }
+
+  return ordenarInstancias(salida);
+}
+
+/** Las de un día. */
+export function instanciasDe(fecha, opciones) {
+  return instanciasEnRango(fecha, fecha, opciones);
+}
+
+function ordenarInstancias(lista) {
+  return lista.sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+    // Lo de todo el día va primero: es el marco del día.
+    if (a.evento.todo_el_dia !== b.evento.todo_el_dia) {
+      return a.evento.todo_el_dia ? -1 : 1;
+    }
+    if (a.evento.todo_el_dia) return a.evento.titulo.localeCompare(b.evento.titulo, 'es');
+    // Por hora del día, no por el instante completo: dos ocurrencias del mismo
+    // evento en fechas distintas ya se separaron arriba.
+    const ha = aHoraOrdenable(a.evento.inicio);
+    const hb = aHoraOrdenable(b.evento.inicio);
+    return ha === hb ? a.evento.titulo.localeCompare(b.evento.titulo, 'es') : ha - hb;
+  });
+}
+
+// Minutos desde la medianoche en hora de Buenos Aires.
+function aHoraOrdenable(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 0;
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d).split(':');
+  return (Number(partes[0]) % 24) * 60 + Number(partes[1]);
+}
+
+/** La comida de un día y un momento. */
+export function comida(fecha, momento) {
+  return estado.menu.find((m) => m.fecha?.slice(0, 10) === fecha && m.momento === momento) ?? null;
+}
+
+/** Las comidas de un día. */
+export function comidasDe(fecha) {
+  return {
+    almuerzo: comida(fecha, 'almuerzo'),
+    cena: comida(fecha, 'cena'),
+  };
+}
+
+/** Los títulos de lo último que se comió, para que el agente no repita. */
+export function comidasRecientes(dias = 14) {
+  const desde = sumarDias(hoy(), -dias);
+  const h = hoy();
+  return estado.menu
+    .filter((m) => {
+      const f = m.fecha?.slice(0, 10);
+      return f >= desde && f <= h;
+    })
+    .map((m) => m.titulo)
+    .filter(Boolean);
+}
+
+export function comprasPendientes() {
+  return estado.compras.filter((c) => !c.comprado);
+}
+
+/** Cuántos minutos de compromisos tiene un día: sirve para saber si hay tiempo de cocinar. */
+export function cargaDelDia(fecha) {
+  const inst = instanciasDe(fecha);
+  const conHora = inst.filter((i) => !i.evento.todo_el_dia);
+  // Lo que pasa de las 17 es lo que come el tiempo de cocinar.
+  const tarde = conHora.filter((i) => aHoraOrdenable(i.evento.inicio) >= 17 * 60);
+  return { total: inst.length, conHora: conHora.length, tarde: tarde.length };
+}
+
+// ---------------------------------------------------------------------------
+//  Navegación
+// ---------------------------------------------------------------------------
+
+/**
+ * Cambia de sección y deja constancia en el historial, para que el botón de
+ * atrás del celular funcione.
+ *
+ * Está acá y no en main.js porque varias pantallas navegan por su cuenta (Hoy
+ * manda a la lista de compras, Menú manda al Chef). Si cada una hiciera
+ * `poner({ vista })` a mano, el historial se quedaría atrás y el botón de atrás
+ * saltearía pantallas o cerraría la app.
+ */
+export function irA(vista, extra = {}) {
+  Object.assign(estado, extra);
+
+  if (estado.vista !== vista) {
+    try {
+      history.pushState({ vista }, '', `#${vista}`);
+    } catch {
+      // Algunos navegadores bloquean pushState en contextos raros. La app
+      // navega igual, solo se pierde el botón de atrás.
+    }
+  }
+
+  poner({ vista });
+  // Al cambiar de sección se vuelve arriba: si no, se entra a la mitad.
+  try {
+    scrollTo({ top: 0 });
+  } catch { /* fuera del navegador */ }
+}
+
+// ---------------------------------------------------------------------------
+//  Tema
+// ---------------------------------------------------------------------------
+
+export function temaGuardado() {
+  try {
+    return localStorage.getItem('ag_tema') ?? 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+export function ponerTema(tema) {
+  try {
+    if (tema === 'auto') {
+      localStorage.removeItem('ag_tema');
+      document.documentElement.removeAttribute('data-tema');
+    } else {
+      localStorage.setItem('ag_tema', tema);
+      document.documentElement.dataset.tema = tema;
+    }
+  } catch { /* localStorage bloqueado */ }
+  avisar();
+}
+
+// ---------------------------------------------------------------------------
+//  Salir
+// ---------------------------------------------------------------------------
+
+export async function cerrarSesion() {
+  dejarDeEscuchar();
+  await db.salir();
+  Object.assign(estado, {
+    sesion: null,
+    hogar: null,
+    personas: [],
+    yo: null,
+    eventos: [],
+    menu: [],
+    compras: [],
+    preferencias: null,
+    calendarios: [],
+    rango: null,
+    vista: 'hoy',
+    fechaElegida: hoy(),
+  });
+  avisar();
+}
+
+// Se usa en varias vistas para saber si una fecha ISO es de hoy.
+export const esHoy = (fecha) => fecha === hoy();
+export { aFecha };

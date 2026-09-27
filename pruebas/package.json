@@ -1,0 +1,12 @@
+{
+  "name": "nuestra-agenda-pruebas",
+  "private": true,
+  "type": "module",
+  "description": "Banco de pruebas de la interfaz. No forma parte de la app que se publica.",
+  "scripts": {
+    "test": "node app.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

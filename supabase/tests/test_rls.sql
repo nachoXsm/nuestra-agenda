@@ -267,6 +267,57 @@ begin
   end;
 
   raise notice '';
+  raise notice '== Reimportar un calendario actualiza, no duplica =========================';
+
+  -- Esto reproduce el upsert que manda PostgREST al reimportar. Si el indice
+  -- unico de ics_uid fuera PARCIAL, este insert fallaria con "no unique or
+  -- exclusion constraint matching the ON CONFLICT specification", porque
+  -- Postgres solo usa un indice parcial cuando el insert repite su condicion, y
+  -- PostgREST no la manda.
+  perform ag_test_como(ana);
+  set local role authenticated;
+
+  insert into ag_eventos (hogar_id, titulo, inicio, ics_uid)
+  values (v_hogar.id, 'Acto del colegio', now() + interval '3 days', 'cal1:acto@colegio')
+  on conflict (hogar_id, ics_uid) do update
+    set titulo = excluded.titulo, inicio = excluded.inicio;
+  perform ag_test_assert(true, 'el upsert por ics_uid no explota');
+
+  -- Segunda pasada: el colegio le cambio la hora.
+  insert into ag_eventos (hogar_id, titulo, inicio, ics_uid)
+  values (v_hogar.id, 'Acto del colegio (nueva hora)', now() + interval '4 days', 'cal1:acto@colegio')
+  on conflict (hogar_id, ics_uid) do update
+    set titulo = excluded.titulo, inicio = excluded.inicio;
+
+  perform ag_test_assert(
+    (select count(*) from ag_eventos where ics_uid = 'cal1:acto@colegio') = 1,
+    'reimportar el mismo evento no lo duplica');
+  perform ag_test_assert(
+    (select titulo from ag_eventos where ics_uid = 'cal1:acto@colegio')
+      = 'Acto del colegio (nueva hora)',
+    'reimportar actualiza el titulo');
+
+  -- Dos calendarios distintos pueden traer el mismo UID: por eso la app le pone
+  -- adelante el id del calendario.
+  insert into ag_eventos (hogar_id, titulo, inicio, ics_uid)
+  values (v_hogar.id, 'Acto del club', now() + interval '3 days', 'cal2:acto@colegio');
+  perform ag_test_assert(
+    (select count(*) from ag_eventos where ics_uid like '%acto@colegio') = 2,
+    'el mismo UID en dos calendarios convive');
+
+  -- Y los eventos cargados a mano no tienen ics_uid: tienen que poder ser
+  -- muchos, porque en un indice unico los NULL no chocan entre si.
+  insert into ag_eventos (hogar_id, titulo, inicio) values
+    (v_hogar.id, 'A mano 1', now()),
+    (v_hogar.id, 'A mano 2', now()),
+    (v_hogar.id, 'A mano 3', now());
+  perform ag_test_assert(
+    (select count(*) from ag_eventos where ics_uid is null and titulo like 'A mano%') = 3,
+    'varios eventos sin ics_uid conviven sin problema');
+
+  reset role;
+
+  raise notice '';
   raise notice '== Feed .ics ==============================================================';
 
   perform ag_test_como(caro);

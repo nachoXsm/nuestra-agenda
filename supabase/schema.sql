@@ -111,9 +111,19 @@ create table if not exists ag_eventos (
 );
 
 create index if not exists ag_eventos_hogar_inicio_ix on ag_eventos (hogar_id, inicio);
+
 -- Reimportar el mismo calendario actualiza en vez de duplicar.
+--
+-- OJO: el indice NO puede ser parcial (...where ics_uid is not null). Postgres
+-- solo usa un indice parcial en un ON CONFLICT si el insert repite la misma
+-- condicion, y PostgREST no la manda: el upsert de la importacion fallaria con
+-- "no unique or exclusion constraint matching the ON CONFLICT specification".
+-- No hace falta que sea parcial igual, porque Postgres trata los NULL como
+-- distintos entre si: los eventos cargados a mano, que no tienen ics_uid,
+-- pueden ser todos los que quieran.
+drop index if exists ag_eventos_ics_uk;
 create unique index if not exists ag_eventos_ics_uk
-  on ag_eventos (hogar_id, ics_uid) where ics_uid is not null;
+  on ag_eventos (hogar_id, ics_uid);
 
 -- Estado de cada ocurrencia de un evento que se repite: si se hizo o si esa
 -- vez puntual no va. Un evento simple usa la fecha de su propio inicio.
