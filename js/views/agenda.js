@@ -156,7 +156,7 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
 
   const titulo = entrada({
     value: b.titulo,
-    placeholder: 'Natación de Tomás',
+    placeholder: 'Clase de natación',
     required: true,
     maxlength: 200,
     'on:input': (e) => (b.titulo = e.target.value),

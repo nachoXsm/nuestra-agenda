@@ -205,7 +205,7 @@ prueba('Hoy muestra lo de hoy y lo de mañana', async (nav) => {
         {
           id: 'e1',
           hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
-          titulo: 'Natación de Tomás',
+          titulo: 'Clase de natación',
           categoria: 'hijo',
           inicio: `${hoyISO()}T19:00:00-03:00`,
           fin: null,
@@ -238,7 +238,7 @@ prueba('Hoy muestra lo de hoy y lo de mañana', async (nav) => {
   // textContent y no innerText: los encabezados de sección llevan
   // text-transform: uppercase, e innerText devuelve el texto ya transformado.
   const texto = await pagina.textContent('#main');
-  afirmar(texto.includes('Natación de Tomás'), 'falta el evento de hoy');
+  afirmar(texto.includes('Clase de natación'), 'falta el evento de hoy');
   afirmar(texto.includes('Acto del colegio'), 'falta el evento de mañana');
   afirmar(texto.includes('Mañana'), 'falta la sección de mañana');
   // El evento de hoy que todavía no pasó aparece como "lo que sigue".
@@ -255,7 +255,7 @@ prueba('se puede anotar un evento y aparece en la agenda', async (nav) => {
   await pagina.click('.fab');
   await pagina.waitForSelector('.hoja');
 
-  await pagina.fill('.hoja input[type="text"]', 'Pediatra de Tomás');
+  await pagina.fill('.hoja input[type="text"]', 'Turno con la pediatra');
   // La categoría Salud.
   await pagina.click('.hoja .chips button:has-text("Salud")');
   await pagina.fill('.hoja input[type="date"]', enDias(2));
@@ -267,7 +267,7 @@ prueba('se puede anotar un evento y aparece en la agenda', async (nav) => {
 
   const guardado = await bd(pagina, () => globalThis.__falso.eventos);
   igual(guardado.length, 1, 'tenía que guardarse un evento');
-  igual(guardado[0].titulo, 'Pediatra de Tomás', 'el título');
+  igual(guardado[0].titulo, 'Turno con la pediatra', 'el título');
   igual(guardado[0].categoria, 'salud', 'la categoría');
   afirmar(
     guardado[0].inicio.startsWith(`${enDias(2)}T16:30:00-03:00`),
@@ -275,7 +275,7 @@ prueba('se puede anotar un evento y aparece en la agenda', async (nav) => {
   );
 
   const texto = await pagina.textContent('#main');
-  afirmar(texto.includes('Pediatra de Tomás'), 'el evento tiene que verse en la agenda');
+  afirmar(texto.includes('Turno con la pediatra'), 'el evento tiene que verse en la agenda');
 
   igual(errores, [], 'hubo errores de JavaScript');
   await contexto.close();
@@ -510,7 +510,7 @@ prueba('el agente recibe la temporada, las preferencias y la agenda', async (nav
       eventos: [{
         id: 'e1',
         hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
-        titulo: 'Natación de Tomás',
+        titulo: 'Clase de natación',
         categoria: 'hijo',
         inicio: `${enDias(1)}T19:00:00-03:00`,
         fin: null,
@@ -541,7 +541,7 @@ prueba('el agente recibe la temporada, las preferencias y la agenda', async (nav
     ['verano', 'otoño', 'invierno', 'primavera'].includes(ctx.temporada.estacion),
     'la estación',
   );
-  afirmar(ctx.personas.includes('Tomás'), 'faltan las personas del hogar');
+  afirmar(ctx.personas.includes('Lila'), 'faltan las personas del hogar');
   afirmar(ctx.preferencias, 'faltan las preferencias');
   afirmar(Array.isArray(ctx.agenda) && ctx.agenda.length === 7, 'la agenda de 7 días');
 
@@ -549,7 +549,7 @@ prueba('el agente recibe la temporada, las preferencias y la agenda', async (nav
   const manana = ctx.agenda.find((d) => d.fecha === enDias(1));
   afirmar(manana, 'falta el día de mañana en la agenda');
   afirmar(
-    manana.compromisos.some((c) => c.includes('Natación')),
+    manana.compromisos.some((c) => c.includes('Clase de natación')),
     `el agente tiene que saber que mañana hay natación: ${JSON.stringify(manana)}`,
   );
 
@@ -897,7 +897,7 @@ prueba('el nombre de un hijo no se interpreta como HTML', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
   // Si en algún lado se arma HTML pegando texto, esto lo destapa.
-  const maligno = '<img src=x onerror="window.__hackeado=1">Tomás';
+  const maligno = '<img src=x onerror="window.__hackeado=1">Juana';
 
   await irA(pagina, 'ajustes');
   await pagina.click('button:has-text("Sumar a alguien de la familia")');

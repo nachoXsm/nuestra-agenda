@@ -54,7 +54,7 @@ declare
 begin
   -- Ana crea el hogar
   perform ag_test_como(ana);
-  v_hogar := ag_crear_hogar('Casa Sánchez', 'Ana', '#8b7cff', '🌻');
+  v_hogar := ag_crear_hogar('Casa de prueba', 'Ana', '#8b7cff', '🌻');
   v_codigo := v_hogar.codigo;
 
   perform ag_test_assert(v_hogar.id is not null, 'ag_crear_hogar devuelve el hogar');
@@ -89,7 +89,7 @@ begin
   perform ag_test_assert((select count(*) from ag_hogares) = 1, 'Ana ve su hogar');
 
   insert into ag_eventos (hogar_id, titulo, categoria, inicio, creado_por)
-  values (v_hogar.id, 'Natación de Tomás', 'hijo', now() + interval '1 day', ana)
+  values (v_hogar.id, 'Clase de natación', 'hijo', now() + interval '1 day', ana)
   returning id into v_evento;
   perform ag_test_assert(v_evento is not null, 'Ana puede crear un evento en su hogar');
 

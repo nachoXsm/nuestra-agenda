@@ -151,7 +151,7 @@ export function abrirArmarMenu() {
   );
 
   const campoInstruccion = areaTexto({
-    placeholder: 'El viernes viene mi hermana a cenar, algo para 5. ' +
+    placeholder: 'El viernes somos cinco a cenar. ' +
       'Y el finde queremos algo más tranquilo.',
     maxlength: 500,
     estilo: { minHeight: '70px' },
@@ -394,7 +394,7 @@ export function abrirPreferencias() {
 
   const campoNotas = areaTexto({
     value: b.notas,
-    placeholder: 'A Tomás no le gusta nada con salsa. Los domingos comemos afuera.',
+    placeholder: 'No nos gusta nada con salsa. Los domingos comemos afuera.',
     maxlength: 500,
     estilo: { minHeight: '70px' },
     'on:input': (e) => (b.notas = e.target.value),

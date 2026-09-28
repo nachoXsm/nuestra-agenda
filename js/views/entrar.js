@@ -355,14 +355,17 @@ export function pantallaHogar(destino, alListo) {
   }
 
   function pintarCrear() {
+    // Los textos de ejemplo de los campos van genéricos a propósito. Si dijeran
+    // un nombre que se parezca al de quien está usando la app, parece que la
+    // app ya sabe quién sos, y eso asusta con razón.
     const nombreHogar = entrada({
-      placeholder: 'Casa Sánchez',
+      placeholder: 'Nuestra casa',
       required: true,
       maxlength: 60,
       autocomplete: 'off',
     });
     const miNombre = entrada({
-      placeholder: 'Nacho',
+      placeholder: 'Tu nombre',
       required: true,
       maxlength: 40,
       autocomplete: 'given-name',
@@ -425,7 +428,7 @@ export function pantallaHogar(destino, alListo) {
     });
 
     const miNombre = entrada({
-      placeholder: 'Sofi',
+      placeholder: 'Tu nombre',
       required: true,
       maxlength: 40,
       autocomplete: 'given-name',

@@ -200,7 +200,7 @@ function abrirPersona(persona = null) {
 
   const campoNombre = entrada({
     value: b.nombre,
-    placeholder: 'Tomás',
+    placeholder: 'El nombre',
     required: true,
     maxlength: 40,
     'on:input': (e) => (b.nombre = e.target.value),
@@ -368,7 +368,7 @@ function abrirImportar(calendario = null) {
 
   const campoNombre = entrada({
     value: b.nombre,
-    placeholder: 'Colegio de Tomás',
+    placeholder: 'Calendario del colegio',
     required: true,
     maxlength: 60,
     'on:input': (e) => (b.nombre = e.target.value),

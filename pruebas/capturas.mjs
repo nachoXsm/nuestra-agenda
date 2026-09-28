@@ -107,12 +107,12 @@ const comida = (fecha, momento, titulo, ingredientes, extra = {}) => ({
 const semilla = {
   hogar: {
     id: HOGAR,
-    nombre: 'Casa Sánchez',
+    nombre: 'Casa de ejemplo',
     codigo: 'TR7KM9',
     feed_token: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb',
   },
   eventos: [
-    ev('e1', 'Natación de Tomás', 'hijo', dia(0), '19:00', 'p3', {
+    ev('e1', 'Clase de natación', 'hijo', dia(0), '19:00', 'p3', {
       lugar: 'Club Belgrano',
       repite: 'semanal',
       repite_dias: [2, 4],

@@ -28,7 +28,7 @@ const bd = {
       id: 'p1',
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: 'u1',
-      nombre: 'Nacho',
+      nombre: 'Ana',
       color: '#8b7cff',
       emoji: '🧉',
       es_admin: true,
@@ -38,7 +38,7 @@ const bd = {
       id: 'p2',
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: 'u2',
-      nombre: 'Sofi',
+      nombre: 'Bruno',
       color: '#ff9f68',
       emoji: '🌻',
       es_admin: false,
@@ -48,7 +48,7 @@ const bd = {
       id: 'p3',
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: null,
-      nombre: 'Tomás',
+      nombre: 'Lila',
       color: '#5bc8ff',
       emoji: '🧒',
       es_admin: false,
@@ -74,7 +74,7 @@ const bd = {
   // Lo que las pruebas quieran manipular.
   sesion: {
     access_token: 'token-de-prueba',
-    user: { id: 'u1', email: 'nacho@prueba.local' },
+    user: { id: 'u1', email: 'ana@prueba.local' },
   },
   // Respuestas preparadas para el agente.
   respuestaChat: 'Con el zapallo que está de temporada te sale una crema en 30 minutos.',
