@@ -1,5 +1,10 @@
 // ============================================================================
-//  Menú de la semana: qué se come cada día, y de dónde sale.
+//  Comidas: el menú de la semana y la lista de compras, en dos solapas.
+//
+//  Van juntas porque son la misma decisión mirada en dos momentos: qué se come
+//  y qué hay que comprar para poder comerlo. La lista se llena sola desde el
+//  menú, así que separarlas en dos secciones de la barra obligaba a saltar de
+//  una a la otra todo el tiempo.
 //
 //  Lo que distingue a esta pantalla: mira la agenda. Si el martes hay natación
 //  a las 19, el día aparece marcado como complicado y el buscador de recetas
@@ -15,7 +20,7 @@ import {
 } from '../data/recetas.js';
 import { clasificar, temporadaDe } from '../data/temporada.js';
 import {
-  conMayuscula,
+  diaSemana,
   DIAS_CORTOS,
   fechaHumana,
   hoy,
@@ -25,8 +30,10 @@ import {
   semanaDe,
   sumarDias,
 } from '../lib/fechas.js';
+import { icono } from '../lib/iconos.js';
 import {
   areaTexto,
+  avatar,
   avisoBien,
   avisoMal,
   campo,
@@ -37,7 +44,9 @@ import {
   elegir,
   entrada,
   hoja,
+  marca,
   pintar,
+  segmentado,
   vacio,
 } from '../lib/ui.js';
 
@@ -47,11 +56,11 @@ const MOMENTOS = ['almuerzo', 'cena'];
 //  Editor de una comida
 // ---------------------------------------------------------------------------
 
-/** Chip que dice si un ingrediente está en su momento. */
-function chipIngrediente(item, mes) {
+/** Marquita que dice si un ingrediente está en su momento. */
+function marcaIngrediente(item, mes) {
   const c = clasificar(item, mes);
-  if (c === 'temporada') return el('span.chip.mini.temporada', { texto: 'de temporada' });
-  if (c === 'fuera') return el('span.chip.mini.fuera', { texto: 'fuera de temporada' });
+  if (c === 'temporada') return marca('de temporada', 'hecha');
+  if (c === 'fuera') return marca('fuera de temporada', 'hoy');
   return null;
 }
 
@@ -120,7 +129,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
           estilo: { flex: '0 0 84px' },
           'on:input': (e) => (ing.cantidad = e.target.value),
         }),
-        el('button.btn.chico.fantasma', {
+        el('button.btn.chico.linea', {
           type: 'button',
           texto: '×',
           'aria-label': `Quitar ${ing.item || 'ingrediente'}`,
@@ -137,9 +146,8 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
     const chips = el('div.chips', { estilo: { marginTop: '8px' } });
     for (const ing of b.ingredientes) {
       if (!ing.item?.trim()) continue;
-      const chip = chipIngrediente(ing.item, mes);
-      if (chip && chip.classList.contains('fuera')) {
-        chips.append(el('span.chip.mini.fuera', { texto: `${ing.item}: fuera de temporada` }));
+      if (clasificar(ing.item, mes) === 'fuera') {
+        chips.append(marca(`${ing.item}: fuera de temporada`, 'hoy'));
       }
     }
     if (chips.children.length) listaIngs.append(chips);
@@ -151,7 +159,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
 
   pintarIngredientes();
 
-  const btnSumarIng = el('button.btn.chico.fantasma.ancho', {
+  const btnSumarIng = el('button.btn.chico.linea.ancho', {
     type: 'button',
     texto: '+ Sumar ingrediente',
     'on:click': () => {
@@ -197,11 +205,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
             texto: `${r.tiempo_min} min · ${r.etiquetas.slice(0, 2).join(', ')}`,
           }),
         ]),
-        el('span', {
-          'aria-hidden': 'true',
-          estilo: { color: 'var(--suave)', fontSize: '0.8rem' },
-          texto: '+',
-        }),
+        icono('mas', { tamano: 16 }),
       ])
     ));
   }
@@ -214,7 +218,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
 
   const swRapidas = el('button.chip', {
     type: 'button',
-    texto: '⚡ Hasta 35 min',
+    texto: 'Hasta 35 min',
     'aria-pressed': String(diaComplicado),
     'on:click': (e) => {
       const activo = e.currentTarget.getAttribute('aria-pressed') !== 'true';
@@ -247,15 +251,13 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
     // El aviso del día complicado, arriba de todo, que es la información que
     // cambia la decisión.
     diaComplicado
-      ? el('div.tarjeta.plana', {
-        estilo: { marginBottom: '14px', borderColor: 'var(--calido)' },
-      }, [
-        el('p', {
-          estilo: { fontSize: '0.84rem', color: 'var(--calido)', fontWeight: '700' },
+      ? el('div.tarjeta.plana', { estilo: { marginBottom: '14px' } }, [
+        el('p.etiqueta', {
+          estilo: { color: 'var(--terracota-texto)' },
           texto: `Ese día hay ${carga.tarde} ${carga.tarde === 1 ? 'cosa' : 'cosas'} a la tarde.`,
         }),
-        el('p', {
-          estilo: { fontSize: '0.8rem', color: 'var(--suave)', marginTop: '3px' },
+        el('p.cuerpo-chico', {
+          estilo: { marginTop: '3px' },
           texto: 'Conviene algo rápido, o cocinar de más el día anterior.',
         }),
       ])
@@ -282,7 +284,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
   ]);
 
   const acciones = el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
@@ -296,16 +298,14 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
     // Ver la receta completa, si vino del recetario.
     const r = comida.receta_id ? recetaPorId(comida.receta_id) : null;
     if (r) {
-      extras.append(el('button.btn.fantasma.ancho.chico', {
+      extras.append(el('button.btn.linea.ancho.chico', {
         type: 'button',
-        texto: '📖  Ver la receta',
         estilo: { marginBottom: '8px' },
         'on:click': () => abrirReceta(r, mes),
-      }));
+      }, [icono('nota', { tamano: 15 }), 'Ver la receta']));
     }
     extras.append(el('button.btn.peligro.ancho.chico', {
       type: 'button',
-      texto: '🗑  Sacar del menú',
       'on:click': async () => {
         try {
           await db.borrarComida(comida.id);
@@ -316,7 +316,7 @@ export function abrirEditorComida({ fecha, momento, comida = null }) {
           avisoMal(db.mensajeDeError(e));
         }
       },
-    }));
+    }, [icono('basura', { tamano: 15 }), 'Sacar del menú']));
   }
 
   let guardando = false;
@@ -378,45 +378,64 @@ export function abrirReceta(r, mes = partes(hoy()).mes) {
   hoja({
     titulo: r.nombre,
     bajada: `${r.tiempo_min} minutos · ${r.etiquetas.join(' · ')}`,
-    contenido: el('div.receta-cuerpo', {}, [
-      el('h3', {
-        estilo: {
-          fontSize: '0.72rem',
-          textTransform: 'uppercase',
-          letterSpacing: '1.2px',
-          color: 'var(--suave)',
-          marginBottom: '4px',
-        },
-        texto: 'Ingredientes',
-      }),
+    contenido: el('div', {}, [
+      el('h3.sobretitulo', { texto: 'Ingredientes' }),
       el('ul.ingredientes', {}, r.ingredientes.map((i) =>
         el('li', {}, [
-          el('span', { 'aria-hidden': 'true', texto: RUBROS[i.rubro]?.emoji ?? '📦' }),
           el('span', { texto: i.item }),
-          chipIngrediente(i.item, mes),
+          marcaIngrediente(i.item, mes),
           i.cantidad ? el('span.cant', { texto: i.cantidad }) : null,
         ])
       )),
-      el('h3', {
-        estilo: {
-          fontSize: '0.72rem',
-          textTransform: 'uppercase',
-          letterSpacing: '1.2px',
-          color: 'var(--suave)',
-          margin: '18px 0 6px',
-        },
+      el('h3.sobretitulo', {
+        estilo: { marginTop: 'var(--e5)', marginBottom: 'var(--e2)' },
         texto: 'Cómo se hace',
       }),
-      el('p', { texto: r.pasos }),
+      el('p.cuerpo', { texto: r.pasos }),
     ]),
   });
 }
 
 // ---------------------------------------------------------------------------
-//  La vista
+//  La vista: dos solapas sobre la misma sección
 // ---------------------------------------------------------------------------
 
-export function vistaMenu(destino) {
+export function vistaComidas(destino) {
+  const tab = est.estado.tabComidas ?? 'menu';
+
+  const control = el('section.seccion', {}, [
+    segmentado(
+      [
+        { valor: 'menu', texto: 'Menú semanal' },
+        { valor: 'compras', texto: 'Lista de compras' },
+      ],
+      tab,
+      (v) => est.poner({ tabComidas: v }),
+      { etiqueta: 'Qué mirar de comidas' },
+    ),
+  ]);
+
+  const cuerpo = tab === 'compras' ? bloqueCompras() : bloqueMenu();
+
+  pintar(destino, control, ...cuerpo);
+
+  // El botón flotante cambia según la solapa: en el menú lleva al Chef, que es
+  // la forma rápida de llenar la semana; en compras suma algo a mano.
+  if (tab === 'menu') {
+    return el('button.fab', {
+      type: 'button',
+      'aria-label': 'Que la IA arme el menú',
+      'on:click': () => est.irA('chef'),
+    }, [icono('chispas', { tamano: 26, trazo: 2 })]);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+//  Solapa: menú de la semana
+// ---------------------------------------------------------------------------
+
+function bloqueMenu() {
   const refSemana = est.estado.semanaVisible ?? hoy();
   const dias = semanaDe(refSemana);
   const mes = partes(dias[3]).mes; // el jueves, para no dudar en el cambio de mes
@@ -433,33 +452,22 @@ export function vistaMenu(destino) {
     el('button', {
       type: 'button',
       'aria-label': 'Semana anterior',
-      texto: '‹',
       'on:click': () => irASemana(-1),
-    }),
-    el('span.titulo', { texto: conMayuscula(rangoSemanaHumano(refSemana)) }),
+    }, [icono('izq')]),
+    el('span.titulo.cap', { texto: rangoSemanaHumano(refSemana) }),
     el('button', {
       type: 'button',
       'aria-label': 'Semana siguiente',
-      texto: '›',
       'on:click': () => irASemana(1),
-    }),
+    }, [icono('der')]),
   ]);
 
   // Qué hay de temporada esta semana: es el dato que ordena todo lo demás.
   const tarjetaTemporada = el('div.tarjeta.plana', {}, [
-    el('p', {
-      estilo: {
-        fontSize: '0.68rem',
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        letterSpacing: '1.2px',
-        color: 'var(--suave)',
-      },
-      texto: `De temporada · ${t.estacion} en Buenos Aires`,
-    }),
+    el('p.sobretitulo', { texto: `De temporada · ${t.estacion} en Buenos Aires` }),
     el('div.chips', { estilo: { marginTop: '8px' } }, [
-      ...t.verduras.slice(0, 7).map((v) => el('span.chip.mini.temporada', { texto: v })),
-      ...t.frutas.slice(0, 4).map((f) => el('span.chip.mini.temporada', { texto: f })),
+      ...t.verduras.slice(0, 7).map((v) => marca(v, 'hecha')),
+      ...t.frutas.slice(0, 4).map((f) => marca(f, 'hecha')),
     ]),
   ]);
 
@@ -469,47 +477,45 @@ export function vistaMenu(destino) {
     const carga = est.cargaDelDia(fecha);
     const p = partes(fecha);
 
+    const aviso = carga.tarde > 0
+      ? marca(`${carga.tarde} cosa${carga.tarde === 1 ? '' : 's'} a la tarde`, 'hoy')
+      : (carga.total > 0 ? marca(`${carga.total} en agenda`, 'pendiente') : null);
+
     return el('div.dia-menu', {
       clase: fecha === hoy() ? 'es-hoy' : '',
     }, [
-      el('header', {}, [
-        el('span.dow', { texto: DIAS_CORTOS[new Date(`${fecha}T12:00:00Z`).getUTCDay()] }),
-        el('span.num', { texto: `${p.dia}/${p.mes}` }),
-        carga.tarde > 0
-          ? el('span.agenda-aviso', {
-            texto: `${carga.tarde} cosa${carga.tarde === 1 ? '' : 's'} a la tarde`,
-          })
-          : (carga.total > 0
-            ? el('span.agenda-aviso', {
-              estilo: { color: 'var(--suave)' },
-              texto: `${carga.total} en agenda`,
-            })
-            : null),
+      el('div.fecha-col', {}, [
+        el('span.d', { texto: DIAS_CORTOS[diaSemana(fecha)] }),
+        el('span.n', { texto: String(p.dia) }),
       ]),
-      ...MOMENTOS.map((momento) => {
-        const c = comidas[momento];
-        if (!c) {
-          return el('button.comida-slot.vacia', {
+      el('div.comidas-col', {}, [
+        aviso ? el('div', { estilo: { marginBottom: '4px' } }, [aviso]) : null,
+        ...MOMENTOS.map((momento) => {
+          const c = comidas[momento];
+          if (!c) {
+            return el('button.comida-slot.vacia', {
+              type: 'button',
+              'on:click': () => abrirEditorComida({ fecha, momento }),
+            }, [
+              el('span.momento', { texto: momento }),
+              el('span.plato', { texto: 'Elegir' }),
+              icono('mas', { tamano: 16 }),
+            ]);
+          }
+          const aCargo = c.a_cargo ? est.persona(c.a_cargo) : null;
+          return el('button.comida-slot', {
             type: 'button',
-            'on:click': () => abrirEditorComida({ fecha, momento }),
+            'on:click': () => abrirEditorComida({ fecha, momento, comida: c }),
           }, [
             el('span.momento', { texto: momento }),
-            el('span.plato', { texto: 'Elegir' }),
-            el('span', { 'aria-hidden': 'true', texto: '+' }),
+            el('span.plato', {}, [
+              c.titulo,
+              aCargo ? el('span.meta', { texto: `cocina ${aCargo.nombre}` }) : null,
+            ]),
+            aCargo ? avatar(aCargo, { tamano: 'chico' }) : null,
           ]);
-        }
-        const aCargo = c.a_cargo ? est.persona(c.a_cargo) : null;
-        return el('button.comida-slot', {
-          type: 'button',
-          'on:click': () => abrirEditorComida({ fecha, momento, comida: c }),
-        }, [
-          el('span.momento', { texto: momento }),
-          el('span.plato', {}, [
-            c.titulo,
-            aCargo ? el('span.meta', { texto: `cocina ${aCargo.nombre}` }) : null,
-          ]),
-        ]);
-      }),
+        }),
+      ]),
     ]);
   });
 
@@ -519,45 +525,39 @@ export function vistaMenu(destino) {
     0,
   );
 
-  const acciones = el('div.seccion', {}, [
+  const acciones = el('section.seccion', {}, [
     el('div.btn-fila', {}, [
       el('button.btn.primario', {
         type: 'button',
-        texto: '👩‍🍳  Que lo arme la IA',
         'on:click': () => est.irA('chef', { semanaVisible: refSemana }),
-      }),
-      el('button.btn', {
+      }, [icono('chispas', { tamano: 16 }), 'Que lo arme la IA']),
+      el('button.btn.suave', {
         type: 'button',
-        texto: '🛒  A la lista',
         disabled: cuantasComidas === 0,
         'on:click': async () => {
           try {
-            const n = await db.menuALaLista(
-              est.estado.hogar.id,
-              dias[0],
-              dias[6],
-            );
+            const n = await db.menuALaLista(est.estado.hogar.id, dias[0], dias[6]);
             await est.recargar('compras');
             avisoBien(
               n === 0
                 ? 'Ya estaba todo en la lista'
                 : `${n} ${n === 1 ? 'cosa' : 'cosas'} a la lista`,
             );
-            if (n > 0) est.irA('compras');
+            if (n > 0) est.poner({ tabComidas: 'compras' });
           } catch (e) {
             avisoMal(db.mensajeDeError(e));
           }
         },
-      }),
+      }, [icono('carrito', { tamano: 16 }), 'A la lista']),
     ]),
     cuantasComidas === 0
-      ? el('p.ayuda', {
+      ? el('p.cuerpo-chico', {
         estilo: { textAlign: 'center', marginTop: '8px' },
         texto: 'Cargá alguna comida y después volcás los ingredientes a la lista de compras.',
       })
       : null,
     cuantasComidas > 0
-      ? el('button.btn.fantasma.ancho.chico', {
+      ? el('button.btn.linea.ancho.chico', {
         type: 'button',
         texto: 'Vaciar la semana',
         estilo: { marginTop: '10px' },
@@ -584,20 +584,18 @@ export function vistaMenu(destino) {
       : null,
   ]);
 
-  pintar(destino,
+  return [
     el('section.seccion', {}, [nav, tarjetaTemporada]),
     el('section.seccion', {}, tarjetasDias),
     acciones,
-  );
-
-  return null;
+  ];
 }
 
 // ---------------------------------------------------------------------------
-//  Lista de compras
+//  Solapa: lista de compras
 // ---------------------------------------------------------------------------
 
-export function vistaCompras(destino) {
+function bloqueCompras() {
   const todas = est.estado.compras;
   const pendientes = todas.filter((c) => !c.comprado);
   const compradas = todas.filter((c) => c.comprado);
@@ -621,16 +619,30 @@ export function vistaCompras(destino) {
     }
   };
 
-  const filaCompra = (c) =>
-    el('button.compra', {
+  // De qué plato salió cada cosa: si aparece "3 zanahorias" en la lista, uno
+  // quiere saber para qué eran antes de decidir si las compra igual.
+  const deQuePlato = (c) => {
+    if (c.origen !== 'menu') return null;
+    const m = est.estado.menu.find((comida) =>
+      (comida.ingredientes ?? []).some((i) =>
+        i.item?.toLowerCase() === c.item?.toLowerCase()
+      )
+    );
+    return m ? `Menú · ${m.titulo}` : null;
+  };
+
+  const filaCompra = (c) => {
+    const de = deQuePlato(c);
+    return el('button.compra', {
       type: 'button',
       clase: c.comprado ? 'listo' : '',
       'on:click': () => alternar(c),
     }, [
-      el('span.caja', { 'aria-hidden': 'true', texto: '✓' }),
-      el('span.nombre', { texto: c.item }),
+      el('span.caja', {}, [icono('tilde', { tamano: 13, trazo: 3 })]),
+      el('span.nombre', {}, [c.item, de ? el('span.de', { texto: de }) : null]),
       c.cantidad ? el('span.cant', { texto: c.cantidad }) : null,
     ]);
+  };
 
   // --- sumar algo a mano ---
   const campoItem = entrada({
@@ -639,23 +651,22 @@ export function vistaCompras(destino) {
     maxlength: 120,
   });
   const selRubro = elegir(
-    Object.entries(RUBROS).map(([k, v]) => [k, `${v.emoji} ${v.nombre}`]),
+    Object.entries(RUBROS).map(([k, v]) => [k, v.nombre]),
     'otros',
-    { estilo: { flex: '0 0 140px' } },
+    { estilo: { flex: '0 0 128px' } },
   );
 
-  const formSumar = el('form', {
-    estilo: { display: 'flex', gap: '6px', marginBottom: '16px' },
+  const formSumar = el('form.seccion', {
+    estilo: { display: 'flex', gap: '6px' },
     novalidate: true,
   }, [
     campoItem,
     selRubro,
     el('button.btn.primario', {
       type: 'submit',
-      texto: '+',
-      estilo: { flex: 'none', padding: '0 16px' },
+      estilo: { flex: 'none', padding: '0 14px' },
       'aria-label': 'Sumar a la lista',
-    }),
+    }, [icono('mas', { tamano: 18, trazo: 2.4 })]),
   ]);
 
   formSumar.addEventListener('submit', async (e) => {
@@ -679,43 +690,41 @@ export function vistaCompras(destino) {
 
   const secciones = rubrosOrdenados.map(([rubro, items]) =>
     el('section.seccion', {}, [
-      el('h2', {}, [
-        `${RUBROS[rubro].emoji} ${RUBROS[rubro].nombre}`,
-        el('span.contador', { texto: String(items.length) }),
+      el('header', {}, [
+        el('h2', { texto: RUBROS[rubro].nombre }),
+        el('span.etiqueta', { texto: String(items.length) }),
       ]),
       el('div', {}, items.map(filaCompra)),
     ])
   );
 
-  pintar(destino,
+  return [
     formSumar,
     pendientes.length
       ? el('div', {}, secciones)
-      : vacio('🛒', 'La lista está vacía. Se llena sola desde el menú de la semana.'),
+      : el('section.seccion', {}, [
+        vacio('carrito', 'La lista está vacía. Se llena sola desde el menú de la semana.'),
+      ]),
     compradas.length
       ? el('section.seccion', {}, [
-        el('h2', {}, [
-          'Ya comprado',
-          el('span.contador', { texto: String(compradas.length) }),
+        el('header', {}, [
+          el('h2', { texto: 'En el carrito' }),
+          el('button.btn.chico.texto', {
+            type: 'button',
+            texto: 'Limpiar',
+            'on:click': async () => {
+              try {
+                await db.borrarComprados(est.estado.hogar.id);
+                await est.recargar('compras');
+                avisoBien('Lista limpia');
+              } catch (e) {
+                avisoMal(db.mensajeDeError(e));
+              }
+            },
+          }),
         ]),
         el('div', {}, compradas.map(filaCompra)),
-        el('button.btn.fantasma.ancho.chico', {
-          type: 'button',
-          texto: 'Limpiar lo comprado',
-          estilo: { marginTop: '10px' },
-          'on:click': async () => {
-            try {
-              await db.borrarComprados(est.estado.hogar.id);
-              await est.recargar('compras');
-              avisoBien('Lista limpia');
-            } catch (e) {
-              avisoMal(db.mensajeDeError(e));
-            }
-          },
-        }),
       ])
       : null,
-  );
-
-  return null;
+  ];
 }

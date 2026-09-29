@@ -15,7 +15,7 @@
 //  tiene que estar al día, y una respuesta vieja acá sería peor que un error.
 // ============================================================================
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `nuestra-agenda-${VERSION}`;
 
 // Lo mínimo para que la app abra sin red.

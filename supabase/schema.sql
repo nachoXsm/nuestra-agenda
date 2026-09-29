@@ -232,6 +232,33 @@ create table if not exists ag_recetas (
 create index if not exists ag_recetas_hogar_ix on ag_recetas (hogar_id);
 
 -- ----------------------------------------------------------------------------
+--  TAREAS DE LA CASA
+--  Lo que hay que hacer pero no tiene hora: pagar el gas, comprar el regalo,
+--  sacar la ropa de invierno. Se reparten entre los integrantes y se tildan.
+-- ----------------------------------------------------------------------------
+create table if not exists ag_tareas (
+  id              uuid primary key default gen_random_uuid(),
+  hogar_id        uuid not null references ag_hogares on delete cascade,
+  titulo          text not null,
+  detalle         text,
+  -- de quien es. null = de la casa, de cualquiera
+  persona_id      uuid references ag_personas on delete set null,
+  -- para cuando tiene que estar. null = sin fecha, alguna vez
+  vence           date,
+  hecha           boolean not null default false,
+  hecha_en        timestamptz,
+  -- no | diaria | semanal | mensual  (al tildar una que repite nace la siguiente)
+  repite          text not null default 'no',
+  creado_por      uuid references auth.users on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- Las dos consultas que hace la app: las pendientes del hogar, y las de la
+-- semana ordenadas por vencimiento.
+create index if not exists ag_tareas_hogar_ix on ag_tareas (hogar_id, hecha, vence);
+
+-- ----------------------------------------------------------------------------
 --  HISTORIAL DEL CHAT CON EL AGENTE
 -- ----------------------------------------------------------------------------
 create table if not exists ag_chef_mensajes (
@@ -264,6 +291,10 @@ drop trigger if exists ag_preferencias_touch on ag_preferencias;
 create trigger ag_preferencias_touch before update on ag_preferencias
   for each row execute function ag_touch_updated_at();
 
+drop trigger if exists ag_tareas_touch on ag_tareas;
+create trigger ag_tareas_touch before update on ag_tareas
+  for each row execute function ag_touch_updated_at();
+
 -- ============================================================================
 --  RLS — nadie ve nada de un hogar del que no es miembro
 -- ============================================================================
@@ -276,6 +307,7 @@ alter table ag_compras        enable row level security;
 alter table ag_calendarios    enable row level security;
 alter table ag_preferencias   enable row level security;
 alter table ag_recetas        enable row level security;
+alter table ag_tareas         enable row level security;
 alter table ag_chef_mensajes  enable row level security;
 
 -- ---- ag_hogares -------------------------------------------------------------
@@ -333,8 +365,8 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'ag_eventos', 'ag_menu', 'ag_compras',
-    'ag_calendarios', 'ag_preferencias', 'ag_recetas', 'ag_chef_mensajes'
+    'ag_eventos', 'ag_menu', 'ag_compras', 'ag_calendarios',
+    'ag_preferencias', 'ag_recetas', 'ag_chef_mensajes', 'ag_tareas'
   ]
   loop
     execute format('drop policy if exists %1$s_todo on %1$s', t);
@@ -542,7 +574,8 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'ag_eventos', 'ag_menu', 'ag_compras', 'ag_personas', 'ag_ocurrencias'
+    'ag_eventos', 'ag_menu', 'ag_compras', 'ag_personas', 'ag_ocurrencias',
+    'ag_tareas'
   ]
   loop
     begin

@@ -347,6 +347,50 @@ export async function menuALaLista(hogarId, desde, hasta) {
 }
 
 // ---------------------------------------------------------------------------
+//  Tareas de la casa
+// ---------------------------------------------------------------------------
+
+export async function tareas(hogarId) {
+  return ok(
+    await sb().from('ag_tareas').select('*')
+      .eq('hogar_id', hogarId)
+      // Las pendientes primero, y dentro de cada grupo por vencimiento. Las que
+      // no tienen fecha van al final: nullsFirst en ascendente las pondría
+      // arriba de todo, que es justo al revés de lo que uno espera.
+      .order('hecha', { ascending: true })
+      .order('vence', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true }),
+  );
+}
+
+export async function guardarTarea(tarea) {
+  if (tarea.id) {
+    const { id, ...cambios } = tarea;
+    return ok(await sb().from('ag_tareas').update(cambios).eq('id', id).select().single());
+  }
+  return ok(await sb().from('ag_tareas').insert(tarea).select().single());
+}
+
+export async function marcarTarea(id, hecha) {
+  return ok(
+    await sb().from('ag_tareas')
+      .update({ hecha, hecha_en: hecha ? new Date().toISOString() : null })
+      .eq('id', id).select().single(),
+  );
+}
+
+export async function borrarTarea(id) {
+  return ok(await sb().from('ag_tareas').delete().eq('id', id));
+}
+
+/** Borra de una todas las que ya están hechas. */
+export async function borrarTareasHechas(hogarId) {
+  return ok(
+    await sb().from('ag_tareas').delete().eq('hogar_id', hogarId).eq('hecha', true),
+  );
+}
+
+// ---------------------------------------------------------------------------
 //  Preferencias de comida
 // ---------------------------------------------------------------------------
 
@@ -503,7 +547,7 @@ export async function borrarReceta(id) {
 export function escucharHogar(hogarId, alCambio) {
   const canal = sb().channel(`hogar-${hogarId}`);
 
-  for (const tabla of ['ag_eventos', 'ag_menu', 'ag_compras', 'ag_personas']) {
+  for (const tabla of ['ag_eventos', 'ag_menu', 'ag_compras', 'ag_personas', 'ag_tareas']) {
     canal.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: tabla, filter: `hogar_id=eq.${hogarId}` },

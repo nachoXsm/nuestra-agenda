@@ -72,6 +72,27 @@ const lunes = (n = 0) => {
 };
 
 const HOGAR = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+// Los integrantes de ejemplo, con los tintes del manual.
+const PERSONAS = [
+  { id: 'p1', hogar_id: HOGAR, user_id: 'u1', nombre: 'Ana', color: '#4F7A63', emoji: '🧉', es_admin: true, orden: 0 },
+  { id: 'p2', hogar_id: HOGAR, user_id: 'u2', nombre: 'Bruno', color: '#2C5A66', emoji: '🌻', es_admin: false, orden: 1 },
+  { id: 'p3', hogar_id: HOGAR, user_id: null, nombre: 'Lila', color: '#C4674A', emoji: '🧒', es_admin: false, orden: 2 },
+];
+
+const tarea = (id, titulo, persona, vence, extra = {}) => ({
+  id,
+  hogar_id: HOGAR,
+  titulo,
+  detalle: null,
+  persona_id: persona,
+  vence,
+  hecha: false,
+  hecha_en: null,
+  repite: 'no',
+  created_at: new Date().toISOString(),
+  ...extra,
+});
 const ev = (id, titulo, categoria, fecha, hora, persona, extra = {}) => ({
   id,
   hogar_id: HOGAR,
@@ -105,6 +126,7 @@ const comida = (fecha, momento, titulo, ingredientes, extra = {}) => ({
 });
 
 const semilla = {
+  personas: PERSONAS,
   hogar: {
     id: HOGAR,
     nombre: 'Casa de ejemplo',
@@ -152,6 +174,15 @@ const semilla = {
       { item: 'Papa', cantidad: '4', rubro: 'verduleria' },
     ]),
   ],
+  tareas: [
+    tarea('t1', 'Pagar el gas', 'p1', dia(0)),
+    tarea('t2', 'Comprar el regalo de cumpleaños', 'p2', dia(2)),
+    tarea('t3', 'Renovar la obra social', 'p1', dia(-1)),
+    tarea('t4', 'Sacar la ropa de invierno', null, null),
+    tarea('t5', 'Llevar las zapatillas al arreglo', 'p2', dia(5)),
+    tarea('t6', 'Turno del dentista', 'p3', dia(4), { hecha: true, hecha_en: new Date().toISOString() }),
+    tarea('t7', 'Sacar la basura', null, dia(0), { hecha: true, repite: 'semanal', hecha_en: new Date().toISOString() }),
+  ],
   compras: [
     { id: 'c1', hogar_id: HOGAR, item: 'Acelga', cantidad: '1 atado', rubro: 'verduleria', comprado: false, origen: 'menu', created_at: new Date().toISOString() },
     { id: 'c2', hogar_id: HOGAR, item: 'Zapallo anco', cantidad: '1 chico', rubro: 'verduleria', comprado: false, origen: 'menu', created_at: new Date().toISOString() },
@@ -185,7 +216,13 @@ function chromiumDelSistema() {
   return existsSync(ruta) ? ruta : undefined;
 }
 
-const navegador = await chromium.launch({ executablePath: chromiumDelSistema() });
+// --lang: los <input type=date|time> los dibuja el navegador con SU idioma, no
+// con el locale del contexto. Sin esto se ven en formato de Estados Unidos
+// (09/29/2026, 07:00 PM), que no es lo que ve alguien en Buenos Aires.
+const navegador = await chromium.launch({
+  executablePath: chromiumDelSistema(),
+  args: ['--lang=es-AR'],
+});
 
 async function capturar(tema) {
   const ctx = await navegador.newContext({
@@ -221,25 +258,45 @@ async function capturar(tema) {
   await pagina.waitForSelector('#barra:not(.oculto)', { timeout: 15_000 });
   await pagina.waitForTimeout(600);
 
-  for (const vista of ['hoy', 'agenda', 'menu', 'chef', 'ajustes']) {
-    await pagina.click(`#barra button[data-vista="${vista}"]`);
+  const sacar = async (nombre) => {
     await pagina.waitForTimeout(450);
-    await pagina.screenshot({ path: join(SALIDA, `${tema}-${vista}.png`) });
-    console.log(`  ${tema}-${vista}.png`);
+    // Sin fullPage a propósito: la barra de abajo y el botón flotante están
+    // fijos, así que en una captura de la página entera aparecerían flotando en
+    // el medio. Lo que se ve acá es lo que se ve en el teléfono.
+    await pagina.screenshot({ path: join(SALIDA, `${tema}-${nombre}.png`) });
+    console.log(`  ${tema}-${nombre}.png`);
+  };
+
+  for (const vista of ['inicio', 'agenda', 'comidas', 'tareas', 'familia']) {
+    await pagina.click(`#barra button[data-vista="${vista}"]`);
+    await sacar(vista);
+  }
+
+  // Las tres alturas de la agenda, que son el corazón de la app.
+  await pagina.click('#barra button[data-vista="agenda"]');
+  await pagina.waitForTimeout(300);
+  for (const modo of ['Semana', 'Día']) {
+    await pagina.click(`.segmentado button:has-text("${modo}")`);
+    await sacar(`agenda-${modo.toLowerCase().replace('í', 'i')}`);
   }
 
   // La lista de compras y una hoja abierta, que son pantallas propias.
-  await pagina.click('button:has-text("Lista de compras")');
-  await pagina.waitForTimeout(450);
-  await pagina.screenshot({ path: join(SALIDA, `${tema}-compras.png`) });
-  console.log(`  ${tema}-compras.png`);
+  await pagina.click('#barra button[data-vista="comidas"]');
+  await pagina.waitForTimeout(300);
+  await pagina.click('.segmentado button:has-text("Lista de compras")');
+  await sacar('compras');
+
+  // El Chef no está en la barra: se entra con el botón flotante de Comidas, que
+  // solo existe en la solapa del menú (en la de compras no hay botón flotante).
+  await pagina.click('.segmentado button:has-text("Menú semanal")');
+  await pagina.waitForTimeout(300);
+  await pagina.click('.fab');
+  await sacar('chef');
 
   await pagina.click('#barra button[data-vista="agenda"]');
   await pagina.waitForTimeout(300);
   await pagina.click('.fab');
-  await pagina.waitForTimeout(500);
-  await pagina.screenshot({ path: join(SALIDA, `${tema}-evento.png`) });
-  console.log(`  ${tema}-evento.png`);
+  await sacar('evento');
 
   await ctx.close();
 }

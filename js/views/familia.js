@@ -1,16 +1,22 @@
 // ============================================================================
-//  Más: hogar, personas, calendario del celular, importar .ics, tema.
+//  Familia: quiénes son, cómo se suma alguien, y los ajustes de la casa.
 //
-//  La parte más valiosa de esta pantalla es "Avisos en el celular": ahí se copia
+//  Empieza por la gente porque es lo que se toca seguido —sumar al nene, ponerle
+//  color a alguien— y sigue con lo que se toca una vez.
+//
+//  La parte más valiosa de esta pantalla es "Que el celular avise": ahí se copia
 //  el link del feed .ics y se suscribe desde el calendario del teléfono. Eso es
 //  lo que hace que la app avise sin push, sin claves VAPID y sin servidor propio.
 // ============================================================================
 import * as db from '../lib/db.js';
 import * as est from '../estado.js';
 import { CATEGORIAS } from '../data/categorias.js';
+import { TINTES, tinte } from '../data/paleta.js';
 import { parsearIcs } from '../lib/ics.js';
 import { aFecha, fechaHumana, hoy } from '../lib/fechas.js';
+import { icono } from '../lib/iconos.js';
 import {
+  avatar,
   avisoBien,
   avisoMal,
   campo,
@@ -25,10 +31,6 @@ import {
 } from '../lib/ui.js';
 import { abrirPreferencias, olvidarChat } from './chef.js';
 
-const COLORES = [
-  '#8b7cff', '#ff9f68', '#ff6b9d', '#5bc8ff',
-  '#3ddc97', '#ffd166', '#ff6b6b', '#c3a3ff',
-];
 const EMOJIS = ['🙂', '😎', '🌻', '🧉', '🐧', '🦊', '🧒', '👶', '🐱', '🐶', '⚽', '🎸'];
 
 // ---------------------------------------------------------------------------
@@ -45,17 +47,15 @@ function abrirInvitar() {
     contenido: [
       el('div.codigo', { texto: h.codigo, 'aria-label': `Código ${h.codigo.split('').join(' ')}` }),
       el('div.btn-fila', { estilo: { marginTop: '14px' } }, [
-        el('button.btn', {
+        el('button.btn.suave', {
           type: 'button',
-          texto: '📋 Copiar',
           'on:click': async () => {
             const ok = await copiar(h.codigo);
             ok ? avisoBien('Código copiado') : avisoMal('No se pudo copiar');
           },
-        }),
+        }, [icono('copiar', { tamano: 16 }), 'Copiar']),
         el('button.btn.primario', {
           type: 'button',
-          texto: '📤 Compartir',
           'on:click': async () => {
             const texto = `Entrá a nuestra agenda con el código ${h.codigo}: ${location.origin}${location.pathname}`;
             try {
@@ -67,7 +67,7 @@ function abrirInvitar() {
               }
             } catch { /* si cancela el menú de compartir, no es un error */ }
           },
-        }),
+        }, [icono('compartir', { tamano: 16 }), 'Compartir']),
       ]),
       el('p.ayuda', {
         estilo: { marginTop: '14px' },
@@ -104,7 +104,7 @@ function abrirAvisos() {
       el('div.chips', { estilo: { marginBottom: '10px' } }, [
         el('button.chip', {
           type: 'button',
-          texto: '🍽 Incluir el menú de la semana',
+          texto: 'Incluir el menú de la semana',
           'aria-pressed': 'false',
           'on:click': (e) => {
             incluirMenu = !incluirMenu;
@@ -116,36 +116,23 @@ function abrirAvisos() {
       cajaUrl,
       el('button.btn.primario.ancho', {
         type: 'button',
-        texto: '📋 Copiar el link',
         estilo: { marginTop: '10px' },
         'on:click': async () => {
           const ok = await copiar(cajaUrl.textContent);
           ok ? avisoBien('Link copiado') : avisoMal('No se pudo copiar');
         },
-      }),
+      }, [icono('copiar', { tamano: 16 }), 'Copiar el link']),
 
-      el('h3', {
-        estilo: {
-          fontSize: '0.72rem',
-          textTransform: 'uppercase',
-          letterSpacing: '1.2px',
-          color: 'var(--suave)',
-          margin: '20px 0 10px',
-        },
+      el('h3.sobretitulo', {
+        estilo: { margin: '20px 0 10px' },
         texto: 'En iPhone',
       }),
       paso(1, 'Ajustes → Calendario → Cuentas → Añadir cuenta → Otra'),
       paso(2, 'Añadir suscripción de calendario'),
       paso(3, 'Pegá el link y guardá'),
 
-      el('h3', {
-        estilo: {
-          fontSize: '0.72rem',
-          textTransform: 'uppercase',
-          letterSpacing: '1.2px',
-          color: 'var(--suave)',
-          margin: '20px 0 10px',
-        },
+      el('h3.sobretitulo', {
+        estilo: { margin: '20px 0 10px' },
         texto: 'En Android',
       }),
       paso(1, 'Abrí calendar.google.com en la computadora (desde el celular no se puede)'),
@@ -161,7 +148,6 @@ function abrirAvisos() {
 
       el('button.btn.peligro.ancho.chico', {
         type: 'button',
-        texto: '🔄 Cambiar el link',
         estilo: { marginTop: '16px' },
         'on:click': async () => {
           const ok = await confirmar({
@@ -181,7 +167,7 @@ function abrirAvisos() {
             avisoMal(db.mensajeDeError(e));
           }
         },
-      }),
+      }, [icono('repetir', { tamano: 15 }), 'Cambiar el link']),
     ],
   });
 }
@@ -194,7 +180,7 @@ function abrirPersona(persona = null) {
   const esNueva = !persona;
   const b = {
     nombre: persona?.nombre ?? '',
-    color: persona?.color ?? COLORES[est.estado.personas.length % COLORES.length],
+    color: persona?.color ?? TINTES[est.estado.personas.length % TINTES.length],
     emoji: persona?.emoji ?? '🧒',
   };
 
@@ -206,24 +192,19 @@ function abrirPersona(persona = null) {
     'on:input': (e) => (b.nombre = e.target.value),
   });
 
-  const muestra = el('div.avatar', {
+  const muestra = el('span.avatar.grande', {
     texto: b.emoji,
-    estilo: {
-      background: b.color + '28',
-      borderColor: b.color,
-      width: '46px',
-      height: '46px',
-    },
+    estilo: { '--tinte': b.color },
   });
 
-  const filaColores = el('div.chips', {}, COLORES.map((c) =>
+  const filaColores = el('div.chips', {}, TINTES.map((c) =>
     el('button', {
       type: 'button',
       'aria-label': `Color ${c}`,
       'aria-pressed': String(c === b.color),
       estilo: {
-        width: '28px',
-        height: '28px',
+        width: '30px',
+        height: '30px',
         borderRadius: '50%',
         background: c,
         border: c === b.color ? '3px solid var(--texto)' : '3px solid transparent',
@@ -237,8 +218,7 @@ function abrirPersona(persona = null) {
         }
         e.currentTarget.style.border = '3px solid var(--texto)';
         e.currentTarget.setAttribute('aria-pressed', 'true');
-        muestra.style.background = c + '28';
-        muestra.style.borderColor = c;
+        muestra.style.setProperty('--tinte', c);
       },
     })
   ));
@@ -276,7 +256,7 @@ function abrirPersona(persona = null) {
   ]);
 
   form.append(el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
@@ -321,7 +301,6 @@ function abrirPersona(persona = null) {
   if (!esNueva && !persona.user_id) {
     extras.append(el('button.btn.peligro.ancho.chico', {
       type: 'button',
-      texto: '🗑  Sacar del hogar',
       estilo: { marginTop: '12px' },
       'on:click': async () => {
         const ok = await confirmar({
@@ -340,7 +319,7 @@ function abrirPersona(persona = null) {
           avisoMal(db.mensajeDeError(e));
         }
       },
-    }));
+    }, [icono('basura', { tamano: 15 }), 'Sacar del hogar']));
   }
 
   hoja({
@@ -382,13 +361,16 @@ function abrirImportar(calendario = null) {
   });
 
   const selCategoria = elegir(
-    Object.entries(CATEGORIAS).map(([k, v]) => [k, `${v.emoji} ${v.nombre}`]),
+    Object.entries(CATEGORIAS).map(([k, v]) => [k, v.nombre]),
     b.categoria,
     { 'on:change': (e) => (b.categoria = e.target.value) },
   );
 
   const selPersona = elegir(
-    [['', 'De toda la familia'], ...est.estado.personas.map((p) => [p.id, `${p.emoji} ${p.nombre}`])],
+    [
+      ['', 'De toda la familia'],
+      ...est.estado.personas.map((p) => [p.id, `${p.emoji ?? ''} ${p.nombre}`.trim()]),
+    ],
     b.persona_id,
     { 'on:change': (e) => (b.persona_id = e.target.value) },
   );
@@ -416,7 +398,7 @@ function abrirImportar(calendario = null) {
   ]);
 
   form.append(el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
@@ -554,101 +536,39 @@ function abrirImportar(calendario = null) {
 //  La vista
 // ---------------------------------------------------------------------------
 
-export function vistaAjustes(destino) {
+/** Una fila de la lista de ajustes: icono, texto, y a la derecha un valor. */
+function filaAjuste(nombreIcono, texto, valor, alTocar) {
+  const hijos = [
+    icono(nombreIcono, { tamano: 20 }),
+    el('span', { texto }),
+    typeof valor === 'string'
+      ? el('span.valor', { texto: valor })
+      : (valor ?? el('span.valor', {}, [icono('der', { tamano: 16 })])),
+  ];
+  return alTocar
+    ? el('button', { type: 'button', 'on:click': alTocar }, hijos)
+    : el('div.fila-ajuste', {}, hijos);
+}
+
+export function vistaFamilia(destino) {
   const h = est.estado.hogar;
   const yo = est.estado.yo;
   const tema = est.temaGuardado();
 
-  // --- hogar ---
-  const seccionHogar = el('section.seccion', {}, [
-    el('h2', {}, ['El hogar']),
-    el('div.lista-ajustes', {}, [
-      el('button', {
-        type: 'button',
-        'on:click': () => {
-          const campoNombre = entrada({ value: h.nombre, maxlength: 60, required: true });
-          const btn = el('button.btn.primario', { type: 'submit', texto: 'Guardar' });
-          const err = el('p.error-campo');
-          const form = el('form', { novalidate: true }, [
-            campo('Nombre del hogar', campoNombre),
-            err,
-            el('div.acciones', {}, [
-              el('button.btn.fantasma', {
-                type: 'button',
-                texto: 'Cancelar',
-                'on:click': () => cerrarHoja(),
-              }),
-              btn,
-            ]),
-          ]);
-          form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const n = campoNombre.value.trim();
-            if (!n) {
-              err.textContent = 'Falta el nombre';
-              return;
-            }
-            btn.disabled = true;
-            try {
-              const nuevo = await db.renombrarHogar(h.id, n);
-              est.poner({ hogar: nuevo });
-              cerrarHoja();
-              avisoBien('Cambiado');
-            } catch (e2) {
-              err.textContent = db.mensajeDeError(e2);
-              btn.disabled = false;
-            }
-          });
-          hoja({ titulo: 'Nombre del hogar', contenido: form });
-        },
-      }, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🏠' }),
-        el('span', { texto: 'Nombre' }),
-        el('span.valor', { texto: h.nombre }),
-      ]),
-      el('button', { type: 'button', 'on:click': abrirInvitar }, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🔑' }),
-        el('span', { texto: 'Invitar' }),
-        el('span.valor', { texto: h.codigo }),
-      ]),
-    ]),
-  ]);
-
-  // --- avisos: lo más importante de esta pantalla ---
-  const seccionAvisos = el('section.seccion', {}, [
-    el('h2', {}, ['Que el celular avise']),
-    el('button.tarjeta', {
-      type: 'button',
-      estilo: { width: '100%', textAlign: 'left', borderColor: 'var(--primary)' },
-      'on:click': abrirAvisos,
-    }, [
-      el('p', {
-        estilo: { fontWeight: '800', fontSize: '0.98rem' },
-        texto: '🔔 Suscribir el calendario del teléfono',
-      }),
-      el('p', {
-        estilo: { fontSize: '0.82rem', color: 'var(--suave)', marginTop: '5px' },
-        texto: 'La agenda aparece en el calendario del celular y los recordatorios ' +
-          'los da el sistema. Es lo que hay que hacer una sola vez para no ' +
-          'olvidarse más nada.',
-      }),
-    ]),
-  ]);
-
-  // --- personas ---
+  // --- la gente, que es lo que uno viene a buscar acá ---
   const seccionPersonas = el('section.seccion', {}, [
-    el('h2', {}, ['La familia', el('span.contador', { texto: String(est.estado.personas.length) })]),
+    el('header', {}, [
+      el('h2', { texto: 'Quiénes somos' }),
+      el('span.etiqueta', { texto: String(est.estado.personas.length) }),
+    ]),
     el('div.tarjeta', {}, [
       ...est.estado.personas.map((p) =>
         el('button.persona-fila', {
           type: 'button',
-          estilo: { width: '100%', textAlign: 'left' },
+          estilo: { '--tinte': tinte(p) },
           'on:click': () => abrirPersona(p),
         }, [
-          el('span.avatar', {
-            texto: p.emoji,
-            estilo: { background: p.color + '28', borderColor: p.color },
-          }),
+          avatar(p, { tamano: 'grande' }),
           el('span.nombre', {}, [
             p.nombre,
             el('span.rol', {
@@ -657,29 +577,97 @@ export function vistaAjustes(destino) {
                 : 'sin cuenta',
             }),
           ]),
-          el('span.flecha', { 'aria-hidden': 'true', texto: '›' }),
+          icono('der', { tamano: 18 }),
         ])
       ),
-      el('button.btn.fantasma.ancho.chico', {
+      el('button.btn.linea.ancho.chico', {
         type: 'button',
-        texto: '+ Sumar a alguien de la familia',
         estilo: { marginTop: '10px' },
         'on:click': () => abrirPersona(),
+      }, [icono('sumarPersona', { tamano: 15 }), 'Sumar a alguien de la familia']),
+    ]),
+  ]);
+
+  // --- avisos: lo más importante de esta pantalla ---
+  const seccionAvisos = el('section.seccion', {}, [
+    el('header', {}, [el('h2', { texto: 'Que el celular avise' })]),
+    el('button.tarjeta', {
+      type: 'button',
+      estilo: {
+        width: '100%',
+        textAlign: 'left',
+        borderColor: 'var(--primario)',
+        display: 'flex',
+        gap: 'var(--e3)',
+        alignItems: 'flex-start',
+      },
+      'on:click': abrirAvisos,
+    }, [
+      el('span', { estilo: { color: 'var(--primario)', flex: 'none' } },
+        [icono('campana', { tamano: 22 })]),
+      el('span', {}, [
+        el('p.t3', { texto: 'Suscribir el calendario del teléfono' }),
+        el('p.cuerpo-chico', {
+          estilo: { marginTop: '4px' },
+          texto: 'La agenda aparece en el calendario del celular y los recordatorios ' +
+            'los da el sistema. Se hace una sola vez y no te olvidás más nada.',
+        }),
+      ]),
+    ]),
+  ]);
+
+  // --- hogar ---
+  const seccionHogar = el('section.seccion', {}, [
+    el('header', {}, [el('h2', { texto: 'El hogar' })]),
+    el('div.lista-ajustes', {}, [
+      filaAjuste('inicio', 'Nombre', h.nombre, () => {
+        const campoNombre = entrada({ value: h.nombre, maxlength: 60, required: true });
+        const btn = el('button.btn.primario', { type: 'submit', texto: 'Guardar' });
+        const err = el('p.error-campo');
+        const form = el('form', { novalidate: true }, [
+          campo('Nombre del hogar', campoNombre),
+          err,
+          el('div.acciones', {}, [
+            el('button.btn.linea', {
+              type: 'button',
+              texto: 'Cancelar',
+              'on:click': () => cerrarHoja(),
+            }),
+            btn,
+          ]),
+        ]);
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const n = campoNombre.value.trim();
+          if (!n) {
+            err.textContent = 'Falta el nombre';
+            return;
+          }
+          btn.disabled = true;
+          try {
+            const nuevo = await db.renombrarHogar(h.id, n);
+            est.poner({ hogar: nuevo });
+            cerrarHoja();
+            avisoBien('Cambiado');
+          } catch (e2) {
+            err.textContent = db.mensajeDeError(e2);
+            btn.disabled = false;
+          }
+        });
+        hoja({ titulo: 'Nombre del hogar', contenido: form });
       }),
+      filaAjuste('sumarPersona', 'Invitar', h.codigo, abrirInvitar),
     ]),
   ]);
 
   // --- calendarios importados ---
   const seccionCalendarios = el('section.seccion', {}, [
-    el('h2', {}, ['Calendarios importados']),
+    el('header', {}, [el('h2', { texto: 'Calendarios importados' })]),
     el('div.tarjeta', {}, [
       ...(est.estado.calendarios.length
         ? est.estado.calendarios.map((c) =>
-          el('div.persona-fila', {}, [
-            el('span.avatar', {
-              texto: CATEGORIAS[c.categoria]?.emoji ?? '📅',
-              estilo: { background: c.color + '28', borderColor: c.color },
-            }),
+          el('div.persona-fila', { estilo: { '--tinte': c.color } }, [
+            el('span.avatar', {}, [icono('agenda', { tamano: 18 })]),
             el('span.nombre', {}, [
               c.nombre,
               el('span.rol', {
@@ -688,16 +676,14 @@ export function vistaAjustes(destino) {
                   : 'sin sincronizar',
               }),
             ]),
-            el('button.btn.chico.fantasma', {
+            el('button.btn.chico.linea', {
               type: 'button',
-              texto: '🔄',
               'aria-label': `Sincronizar ${c.nombre}`,
               estilo: { flex: 'none', minHeight: '34px', padding: '0 10px' },
               'on:click': () => abrirImportar(c),
-            }),
-            el('button.btn.chico.fantasma', {
+            }, [icono('repetir', { tamano: 15 })]),
+            el('button.btn.chico.linea', {
               type: 'button',
-              texto: '🗑',
               'aria-label': `Borrar ${c.nombre}`,
               estilo: { flex: 'none', minHeight: '34px', padding: '0 10px' },
               'on:click': async () => {
@@ -716,44 +702,38 @@ export function vistaAjustes(destino) {
                   avisoMal(db.mensajeDeError(e));
                 }
               },
-            }),
+            }, [icono('basura', { tamano: 15 })]),
           ])
         )
         : [
-          el('p.ayuda', {
+          el('p.cuerpo-chico', {
             texto: 'Todavía no importaste ninguno. Sirve para el calendario del ' +
               'colegio, del club, o de Google.',
           }),
         ]),
-      el('button.btn.fantasma.ancho.chico', {
+      el('button.btn.linea.ancho.chico', {
         type: 'button',
-        texto: '+ Importar un calendario',
         estilo: { marginTop: '10px' },
         'on:click': () => abrirImportar(),
-      }),
+      }, [icono('mas', { tamano: 15 }), 'Importar un calendario']),
     ]),
   ]);
 
   // --- comida y app ---
   const seccionApp = el('section.seccion', {}, [
-    el('h2', {}, ['La app']),
+    el('header', {}, [el('h2', { texto: 'La app' })]),
     el('div.lista-ajustes', {}, [
-      el('button', { type: 'button', 'on:click': abrirPreferencias }, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🍽' }),
-        el('span', { texto: 'Cómo comen en casa' }),
-        el('span.flecha', { 'aria-hidden': 'true', texto: '›' }),
-      ]),
-      el('button', {
-        type: 'button',
-        'on:click': () => est.irA('compras'),
-      }, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🛒' }),
-        el('span', { texto: 'Lista de compras' }),
-        el('span.valor', { texto: String(est.comprasPendientes().length) }),
-      ]),
-      el('div.fila-ajuste', {}, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🎨' }),
-        el('span', { texto: 'Tema' }),
+      filaAjuste('comidas', 'Cómo comen en casa', null, abrirPreferencias),
+      filaAjuste('chispas', 'Chef', null, () => est.irA('chef')),
+      filaAjuste(
+        'carrito',
+        'Lista de compras',
+        String(est.comprasPendientes().length),
+        () => est.irA('comidas', { tabComidas: 'compras' }),
+      ),
+      filaAjuste(
+        tema === 'claro' ? 'sol' : 'luna',
+        'Tema',
         el('div', { estilo: { marginLeft: 'auto', maxWidth: '150px' } }, [
           elegir(
             [['auto', 'Como el sistema'], ['oscuro', 'Oscuro'], ['claro', 'Claro']],
@@ -761,21 +741,15 @@ export function vistaAjustes(destino) {
             { 'on:change': (e) => est.ponerTema(e.target.value) },
           ),
         ]),
-      ]),
+      ),
     ]),
   ]);
 
   // --- cuenta ---
   const seccionCuenta = el('section.seccion', {}, [
-    el('h2', {}, ['Tu cuenta']),
+    el('header', {}, [el('h2', { texto: 'Tu cuenta' })]),
     el('div.lista-ajustes', {}, [
-      el('div.fila-ajuste', {}, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '📧' }),
-        el('span', {
-          texto: est.estado.sesion?.user?.email ?? '—',
-          estilo: { fontSize: '0.84rem', overflow: 'hidden', textOverflow: 'ellipsis' },
-        }),
-      ]),
+      filaAjuste('info', est.estado.sesion?.user?.email ?? '—', ' '),
       el('button', {
         type: 'button',
         'on:click': async () => {
@@ -789,20 +763,20 @@ export function vistaAjustes(destino) {
           await est.cerrarSesion();
         },
       }, [
-        el('span.ico', { 'aria-hidden': 'true', texto: '🚪' }),
-        el('span', { texto: 'Cerrar sesión', estilo: { color: 'var(--peligro)' } }),
+        icono('salir', { tamano: 20 }),
+        el('span', { texto: 'Cerrar sesión', estilo: { color: 'var(--terracota-texto)' } }),
       ]),
     ]),
-    el('p.ayuda', {
+    el('p.cuerpo-chico', {
       estilo: { textAlign: 'center', marginTop: '16px' },
-      texto: `Nuestra Agenda · ${hoy().slice(0, 4)}`,
+      texto: `juntos · ${hoy().slice(0, 4)}`,
     }),
   ]);
 
   pintar(destino,
+    seccionPersonas,
     seccionAvisos,
     seccionHogar,
-    seccionPersonas,
     seccionCalendarios,
     seccionApp,
     seccionCuenta,

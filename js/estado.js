@@ -6,7 +6,15 @@
 //  con unas decenas de filas eso es instantáneo.
 // ============================================================================
 import * as db from './lib/db.js';
-import { aFecha, diasEntre, hoy, ocurrencias, sumarDias, sumarMeses } from './lib/fechas.js';
+import {
+  aFecha,
+  diasEntre,
+  hoy,
+  inicioSemana,
+  ocurrencias,
+  sumarDias,
+  sumarMeses,
+} from './lib/fechas.js';
 
 export const estado = {
   // sesión
@@ -19,14 +27,20 @@ export const estado = {
   eventos: [],
   menu: [],
   compras: [],
+  tareas: [],
   preferencias: null,
   calendarios: [],
 
   // navegación
-  vista: 'hoy',
+  vista: 'inicio',
   fechaElegida: hoy(),
   mesVisible: null, // { anio, mes }
   semanaVisible: null, // fecha de cualquier día de la semana
+
+  // cómo se está mirando cada sección
+  modoAgenda: 'mes', // mes | semana | dia
+  filtroPersona: 'todos', // 'todos' o el id de un integrante
+  tabComidas: 'menu', // menu | compras
 
   // banderas
   cargando: true,
@@ -82,14 +96,16 @@ export async function cargarTodo() {
 
   poner({ cargando: true });
   try {
-    const [personas, eventos, menu, compras, preferencias, calendarios] = await Promise.all([
-      db.personas(estado.hogar.id),
-      db.eventos(estado.hogar.id, rango.desde, rango.hasta),
-      db.menu(estado.hogar.id, sumarDias(rango.desde, 0), rango.hasta),
-      db.compras(estado.hogar.id),
-      db.preferencias(estado.hogar.id),
-      db.calendarios(estado.hogar.id),
-    ]);
+    const [personas, eventos, menu, compras, tareas, preferencias, calendarios] =
+      await Promise.all([
+        db.personas(estado.hogar.id),
+        db.eventos(estado.hogar.id, rango.desde, rango.hasta),
+        db.menu(estado.hogar.id, sumarDias(rango.desde, 0), rango.hasta),
+        db.compras(estado.hogar.id),
+        db.tareas(estado.hogar.id),
+        db.preferencias(estado.hogar.id),
+        db.calendarios(estado.hogar.id),
+      ]);
 
     const miId = estado.sesion?.user?.id;
     Object.assign(estado, {
@@ -98,6 +114,7 @@ export async function cargarTodo() {
       eventos,
       menu,
       compras,
+      tareas,
       preferencias,
       calendarios,
       rango,
@@ -113,10 +130,11 @@ export async function recargar(que) {
   const id = estado.hogar.id;
   const rango = estado.rango ?? rangoPorDefecto();
 
-  const tareas = {
+  const traer = {
     eventos: () => db.eventos(id, rango.desde, rango.hasta).then((v) => ({ eventos: v })),
     menu: () => db.menu(id, rango.desde, rango.hasta).then((v) => ({ menu: v })),
     compras: () => db.compras(id).then((v) => ({ compras: v })),
+    tareas: () => db.tareas(id).then((v) => ({ tareas: v })),
     personas: () =>
       db.personas(id).then((v) => ({
         personas: v,
@@ -126,8 +144,8 @@ export async function recargar(que) {
     calendarios: () => db.calendarios(id).then((v) => ({ calendarios: v })),
   };
 
-  const cuales = [].concat(que).filter((k) => tareas[k]);
-  const resultados = await Promise.all(cuales.map((k) => tareas[k]()));
+  const cuales = [].concat(que).filter((k) => traer[k]);
+  const resultados = await Promise.all(cuales.map((k) => traer[k]()));
   poner(Object.assign({}, ...resultados));
 }
 
@@ -169,6 +187,7 @@ export function escuchar() {
       ag_ocurrencias: 'eventos',
       ag_menu: 'menu',
       ag_compras: 'compras',
+      ag_tareas: 'tareas',
       ag_personas: 'personas',
     };
     const que = mapa[tabla];
@@ -305,6 +324,67 @@ export function cargaDelDia(fecha) {
 }
 
 // ---------------------------------------------------------------------------
+//  Tareas
+// ---------------------------------------------------------------------------
+
+/** Las que faltan hacer, en el orden en que llegaron de la base. */
+export function tareasPendientes() {
+  return estado.tareas.filter((t) => !t.hecha);
+}
+
+/**
+ * Si una tarea está atrasada, vence hoy, o todavía falta.
+ * @returns {'atrasada'|'hoy'|'pronto'|'sinfecha'}
+ */
+export function urgenciaTarea(tarea) {
+  if (!tarea.vence) return 'sinfecha';
+  const v = tarea.vence.slice(0, 10);
+  const h = hoy();
+  if (v < h) return 'atrasada';
+  if (v === h) return 'hoy';
+  return 'pronto';
+}
+
+/**
+ * Cómo viene la semana de tareas: el total, cuántas se hicieron, y el desglose
+ * por integrante para las barritas.
+ */
+export function progresoTareas() {
+  const desde = inicioSemana(hoy());
+  const hasta = sumarDias(desde, 6);
+
+  // Cuentan las de esta semana y las que quedaron colgadas de antes: una tarea
+  // atrasada sigue siendo trabajo pendiente de esta semana.
+  const deLaSemana = estado.tareas.filter((t) => {
+    if (!t.vence) return !t.hecha;
+    const v = t.vence.slice(0, 10);
+    return v <= hasta && (v >= desde || !t.hecha);
+  });
+
+  const hechas = deLaSemana.filter((t) => t.hecha).length;
+  const total = deLaSemana.length;
+
+  const porPersona = estado.personas.map((p) => {
+    const suyas = deLaSemana.filter((t) => t.persona_id === p.id);
+    return {
+      persona: p,
+      total: suyas.length,
+      hechas: suyas.filter((t) => t.hecha).length,
+    };
+  });
+
+  return {
+    total,
+    hechas,
+    porcentaje: total ? (hechas / total) * 100 : 0,
+    porPersona,
+    // Las que no son de nadie en particular.
+    deLaCasa: deLaSemana.filter((t) => !t.persona_id),
+    lista: deLaSemana,
+  };
+}
+
+// ---------------------------------------------------------------------------
 //  Navegación
 // ---------------------------------------------------------------------------
 
@@ -376,10 +456,11 @@ export async function cerrarSesion() {
     eventos: [],
     menu: [],
     compras: [],
+    tareas: [],
     preferencias: null,
     calendarios: [],
     rango: null,
-    vista: 'hoy',
+    vista: 'inicio',
     fechaElegida: hoy(),
   });
   avisar();

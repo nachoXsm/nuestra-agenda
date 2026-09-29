@@ -352,7 +352,7 @@ export async function generarFeed(
   const lineas: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Nuestra Agenda//ES',
+    'PRODID:-//juntos//ES',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(hogar.nombre)}`,

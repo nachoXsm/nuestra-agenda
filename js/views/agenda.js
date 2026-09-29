@@ -1,27 +1,46 @@
 // ============================================================================
-//  Agenda: el calendario del mes, el día elegido, y el editor de eventos.
+//  Agenda: el calendario, en tres alturas de vuelo.
 //
-//  El editor se exporta porque también se abre desde Hoy.
+//    Mes     — todo el mes de un vistazo. Cada día muestra los eventos
+//              escritos, no puntitos: la idea es no tener que tocar para
+//              enterarse de que el martes hay natación.
+//    Semana  — los siete días abiertos, uno abajo del otro, con todo lo que
+//              tiene cada uno.
+//    Día     — un día entero con las horas a la izquierda, más lo que se come
+//              y las tareas que vencen.
+//
+//  Arriba de todo hay un filtro por integrante: "Todos" o una persona. Con
+//  tres personas cargadas el mes se llena, y poder mirar solo lo del nene es
+//  media agenda.
+//
+//  El editor de eventos se exporta porque también se abre desde Inicio.
 // ============================================================================
 import * as db from '../lib/db.js';
 import * as est from '../estado.js';
 import { AVISOS, categoria, CATEGORIAS, REPETICIONES } from '../data/categorias.js';
+import { tinte } from '../data/paleta.js';
 import {
   aHora,
   combinarFechaHora,
-  conMayuscula,
   DIAS_CORTOS,
+  DIAS_LARGOS,
+  diaSemana,
+  duracionMin,
   fechaHumana,
   fechaLarga,
   grillaMes,
   hoy,
+  inicioSemana,
   mesLargo,
   partes,
+  rangoSemanaHumano,
   sumarDias,
 } from '../lib/fechas.js';
 import { descargarIcs, eventoAIcs } from '../lib/ics.js';
+import { icono } from '../lib/iconos.js';
 import {
   areaTexto,
+  avatar,
   avisoBien,
   avisoMal,
   campo,
@@ -32,10 +51,57 @@ import {
   entrada,
   hoja,
   interruptor,
+  marca,
   pintar,
+  segmentado,
   vacio,
   vibrar,
 } from '../lib/ui.js';
+
+// ---------------------------------------------------------------------------
+//  Color
+// ---------------------------------------------------------------------------
+
+/**
+ * El color con el que se pinta un evento. Si tiene dueño, el de la persona:
+ * en una agenda compartida lo primero que uno busca es de quién es. Si es de
+ * toda la familia, el de la categoría.
+ */
+export function tinteDe(inst) {
+  if (inst.persona) return tinte(inst.persona);
+  return categoria(inst.evento.categoria).color;
+}
+
+// ---------------------------------------------------------------------------
+//  Filtro por integrante
+// ---------------------------------------------------------------------------
+
+function filtroIntegrantes() {
+  const actual = est.estado.filtroPersona ?? 'todos';
+  const cont = el('div.chips.scroll', { role: 'group', 'aria-label': 'Filtrar por integrante' });
+
+  const chip = (valor, texto, color) => el('button.chip', {
+    type: 'button',
+    texto,
+    'aria-pressed': String(valor === actual),
+    estilo: color ? { '--tinte': color } : {},
+    'on:click': () => est.poner({ filtroPersona: valor }),
+  });
+
+  cont.append(chip('todos', 'Todos'));
+  for (const p of est.estado.personas) {
+    cont.append(chip(p.id, `${p.emoji ?? ''} ${p.nombre}`.trim(), tinte(p)));
+  }
+  return cont;
+}
+
+/** Aplica el filtro de arriba a una lista de instancias. */
+function filtrar(instancias) {
+  const f = est.estado.filtroPersona ?? 'todos';
+  if (f === 'todos') return instancias;
+  // Lo que es de toda la familia le toca a todos, así que queda siempre.
+  return instancias.filter((i) => i.evento.persona_id === f || !i.evento.persona_id);
+}
 
 // ---------------------------------------------------------------------------
 //  Una fila de evento
@@ -51,48 +117,51 @@ export function filaEvento(inst, { mostrarFecha = false } = {}) {
 
   const detalles = [];
   if (mostrarFecha) detalles.push(fechaHumana(fecha));
+  detalles.push(cat.nombre);
+  if (persona) detalles.push(persona.nombre);
   if (evento.lugar) detalles.push(evento.lugar);
-  if (evento.repite !== 'no') detalles.push('se repite');
   if (evento.calendario_id) {
     const cal = est.estado.calendarios.find((c) => c.id === evento.calendario_id);
     if (cal) detalles.push(cal.nombre);
   }
 
-  const fila = el('button.evento', {
-    clase: hecho ? 'hecho' : '',
+  // Solo se muestra la duración si el evento la tiene de verdad: duracionMin
+  // devuelve una hora por defecto, y poner "1 h" en todo sería inventar.
+  const minutos = evento.fin ? duracionMin(evento) : 0;
+
+  const fila = el('button.fila.con-tinte', {
+    clase: hecho ? 'hecha' : '',
     type: 'button',
+    estilo: { '--tinte': tinteDe(inst) },
     'on:click': () => abrirEditorEvento({ evento, fecha }),
   }, [
-    el('span.hora', {
-      texto: evento.todo_el_dia ? 'todo el día' : aHora(evento.inicio),
-      estilo: evento.todo_el_dia ? { fontSize: '0.64rem', lineHeight: '1.2' } : {},
-    }),
-    el('span.cuerpo', {}, [
-      el('span.titulo', {}, [
-        el('span', { 'aria-hidden': 'true', texto: cat.emoji }),
+    el('span.horas', {}, evento.todo_el_dia
+      ? [el('span', { texto: 'todo' }), el('span', { texto: 'el día' })]
+      : [
+        aHora(evento.inicio),
+        minutos ? el('span', { texto: minutosHumanos(minutos) }) : null,
+      ]),
+    el('span.cuerpo-fila', {}, [
+      el('span.fila-titulo', {}, [
         el('span', { texto: evento.titulo }),
-        persona
-          ? el('span.persona-punto', {
-            estilo: { background: persona.color },
-            title: persona.nombre,
-          })
+        evento.repite !== 'no'
+          ? icono('repetir', { tamano: 13, trazo: 2.2, titulo: 'Se repite' })
+          : null,
+        evento.aviso_minutos
+          ? icono('campana', { tamano: 13, trazo: 2.2, titulo: 'Tiene aviso' })
           : null,
       ]),
-      detalles.length
-        ? el('span.detalle', {}, [detalles.join(' · ')])
-        : null,
+      el('span.fila-sub', { texto: detalles.join(' · ') }),
     ]),
   ]);
-
-  fila.style.borderLeftColor = cat.color;
 
   // El tilde de "ya está" no abre el editor.
   const tilde = el('span.tilde', {
     role: 'button',
     tabindex: '0',
     'aria-label': hecho ? `Desmarcar ${evento.titulo}` : `Marcar ${evento.titulo} como hecho`,
-    texto: '✓',
-  });
+  }, [icono('tilde', { tamano: 14, trazo: 2.6 })]);
+
   const alternar = async (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -114,12 +183,334 @@ export function filaEvento(inst, { mostrarFecha = false } = {}) {
   return fila;
 }
 
+function minutosHumanos(min) {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${m}` : `${h} h`;
+}
+
 /** Lista de eventos, con su estado vacío. */
 export function listaEventos(instancias, { mostrarFecha = false, vacioTexto } = {}) {
   if (!instancias.length) {
-    return vacio('🌤', vacioTexto ?? 'No hay nada anotado. Día libre.');
+    return vacio('planta', vacioTexto ?? 'No hay nada anotado. Día libre.');
   }
   return el('div', {}, instancias.map((i) => filaEvento(i, { mostrarFecha })));
+}
+
+// ---------------------------------------------------------------------------
+//  Vista de mes
+// ---------------------------------------------------------------------------
+
+/** Cuántas tiritas entran en una celda del mes sin que se desborde. */
+const MINIS_POR_CELDA = 3;
+
+function vistaMes(elegida) {
+  const visible = est.estado.mesVisible ?? {
+    anio: partes(elegida).anio,
+    mes: partes(elegida).mes,
+  };
+
+  const irAlMes = async (delta) => {
+    let { anio, mes } = visible;
+    mes += delta;
+    if (mes > 12) {
+      mes = 1;
+      anio++;
+    }
+    if (mes < 1) {
+      mes = 12;
+      anio--;
+    }
+    est.estado.mesVisible = { anio, mes };
+    await est.asegurarRango(`${anio}-${String(mes).padStart(2, '0')}-15`);
+    est.avisar();
+  };
+
+  const nav = el('div.mes-nav', {}, [
+    el('button', {
+      type: 'button',
+      'aria-label': 'Mes anterior',
+      'on:click': () => irAlMes(-1),
+    }, [icono('izq')]),
+    el('span.titulo.cap', { texto: mesLargo(visible.anio, visible.mes) }),
+    el('button', {
+      type: 'button',
+      'aria-label': 'Mes siguiente',
+      'on:click': () => irAlMes(1),
+    }, [icono('der')]),
+  ]);
+
+  const grilla = el('div.grilla-mes', { role: 'grid' });
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+    grilla.append(el('div.dow', { texto: DIAS_CORTOS[d], 'aria-hidden': 'true' }));
+  }
+
+  for (const { fecha, delMes } of grillaMes(visible.anio, visible.mes)) {
+    const inst = filtrar(est.instanciasDe(fecha));
+    const comidas = est.comidasDe(fecha);
+    const algoDeComer = comidas.almuerzo ?? comidas.cena;
+
+    const minis = inst.slice(0, MINIS_POR_CELDA).map((i) =>
+      el('span.mini', {
+        estilo: { '--tinte': tinteDe(i) },
+        // Solo el título: la celda tiene unos 50 px y metiendo también la hora
+        // no entra ni la primera palabra ("19 Cl…").
+        texto: i.evento.titulo,
+        title: i.evento.todo_el_dia
+          ? i.evento.titulo
+          : `${aHora(i.evento.inicio)} · ${i.evento.titulo}`,
+      })
+    );
+    if (inst.length > MINIS_POR_CELDA) {
+      minis.push(el('span.mini.mas', { texto: `+${inst.length - MINIS_POR_CELDA}` }));
+    }
+
+    grilla.append(el('button.dia-celda', {
+      type: 'button',
+      clase: [delMes ? '' : 'otro-mes', fecha === hoy() ? 'hoy' : ''].join(' '),
+      'aria-pressed': String(fecha === elegida),
+      'aria-label': `${fechaLarga(fecha)}, ${inst.length} ${inst.length === 1 ? 'cosa' : 'cosas'}`,
+      'on:click': () => est.poner({ fechaElegida: fecha }),
+    }, [
+      el('span.num', { texto: String(partes(fecha).dia) }),
+      ...minis,
+      // Si ya se decidió qué se come, un renglón chiquito con el plato.
+      algoDeComer && !minis.length
+        ? el('span.comida', { texto: algoDeComer.titulo })
+        : null,
+    ]));
+  }
+
+  return [
+    el('section.seccion', {}, [nav, grilla]),
+    diaAmpliado(elegida, { conComidas: true }),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+//  Vista de semana
+// ---------------------------------------------------------------------------
+
+function vistaSemana(elegida) {
+  const lunes = inicioSemana(est.estado.semanaVisible ?? elegida);
+  const dias = Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i));
+
+  const irALaSemana = async (delta) => {
+    const nueva = sumarDias(lunes, delta * 7);
+    est.estado.semanaVisible = nueva;
+    await est.asegurarRango(nueva);
+    est.avisar();
+  };
+
+  const nav = el('div.mes-nav', {}, [
+    el('button', {
+      type: 'button',
+      'aria-label': 'Semana anterior',
+      'on:click': () => irALaSemana(-1),
+    }, [icono('izq')]),
+    el('span.titulo.cap', { texto: rangoSemanaHumano(lunes) }),
+    el('button', {
+      type: 'button',
+      'aria-label': 'Semana siguiente',
+      'on:click': () => irALaSemana(1),
+    }, [icono('der')]),
+  ]);
+
+  // La tira de arriba: sirve para saltar a un día sin perder de vista la
+  // semana entera, y para ver de un golpe qué día está cargado.
+  const tira = el('div.tira-semana', {});
+  for (const f of dias) {
+    const inst = filtrar(est.instanciasDe(f));
+    const colores = [...new Set(inst.map((i) => tinteDe(i)))].slice(0, 4);
+    tira.append(el('button', {
+      type: 'button',
+      clase: f === hoy() ? 'hoy' : '',
+      'aria-pressed': String(f === elegida),
+      'aria-label': `${fechaLarga(f)}, ${inst.length} ${inst.length === 1 ? 'cosa' : 'cosas'}`,
+      'on:click': () => est.poner({ fechaElegida: f, modoAgenda: 'dia' }),
+    }, [
+      el('span.d', { texto: DIAS_CORTOS[diaSemana(f)] }),
+      el('span.n', { texto: String(partes(f).dia) }),
+      el('span.puntos', {}, colores.map((c) => el('i', { estilo: { '--tinte': c } }))),
+    ]));
+  }
+
+  // Y abajo los siete días abiertos, que es lo que se pidió: ver todo sin
+  // tocar nada.
+  const grupos = dias.map((f) => {
+    const inst = filtrar(est.instanciasDe(f));
+    const comidas = est.comidasDe(f);
+    const platos = [comidas.almuerzo?.titulo, comidas.cena?.titulo].filter(Boolean);
+
+    return el('section.dia-grupo', {}, [
+      el('header', {}, [
+        el('span.nombre', {
+          texto: `${DIAS_LARGOS[diaSemana(f)]} ${partes(f).dia}`,
+        }),
+        f === hoy() ? marca('Hoy', 'hoy') : null,
+        el('span.cuantos', {
+          texto: inst.length ? `${inst.length}` : 'libre',
+        }),
+      ]),
+      inst.length
+        ? el('div', {}, inst.map((i) => filaEvento(i)))
+        : el('p.cuerpo-chico', { texto: 'Sin nada anotado.' }),
+      platos.length
+        ? el('p.cuerpo-chico', {
+          estilo: { marginTop: '8px' },
+          texto: `Se come: ${platos.join(' · ')}`,
+        })
+        : null,
+    ]);
+  });
+
+  return [el('section.seccion', {}, [nav, tira]), ...grupos];
+}
+
+// ---------------------------------------------------------------------------
+//  Vista de día
+// ---------------------------------------------------------------------------
+
+function vistaDia(elegida) {
+  const irAlDia = async (delta) => {
+    const nueva = sumarDias(elegida, delta);
+    await est.asegurarRango(nueva);
+    est.poner({ fechaElegida: nueva, semanaVisible: nueva });
+  };
+
+  const nav = el('div.mes-nav', {}, [
+    el('button', {
+      type: 'button',
+      'aria-label': 'Día anterior',
+      'on:click': () => irAlDia(-1),
+    }, [icono('izq')]),
+    el('span.titulo.cap', { texto: fechaHumana(elegida) }),
+    el('button', {
+      type: 'button',
+      'aria-label': 'Día siguiente',
+      'on:click': () => irAlDia(1),
+    }, [icono('der')]),
+  ]);
+
+  return [
+    el('section.seccion', {}, [
+      nav,
+      el('p.cuerpo-chico.cap', {
+        estilo: { textAlign: 'center', marginTop: '-4px' },
+        texto: fechaLarga(elegida),
+      }),
+    ]),
+    diaAmpliado(elegida, { conComidas: true, conTareas: true, sinTitulo: true }),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+//  El bloque del día elegido, que usan Mes y Día
+// ---------------------------------------------------------------------------
+
+function diaAmpliado(fecha, { conComidas = false, conTareas = false, sinTitulo = false } = {}) {
+  const inst = filtrar(est.instanciasDe(fecha));
+  const comidas = est.comidasDe(fecha);
+  const tareas = est.estado.tareas.filter((t) => t.vence?.slice(0, 10) === fecha);
+
+  const bloques = [];
+
+  bloques.push(el('section.seccion', {}, [
+    sinTitulo ? null : el('header', {}, [
+      el('h2.cap', { texto: fechaHumana(fecha) }),
+      el('span.etiqueta', {
+        texto: inst.length
+          ? `${inst.length} ${inst.length === 1 ? 'cosa' : 'cosas'}`
+          : 'libre',
+      }),
+    ]),
+    listaEventos(inst, {
+      vacioTexto: fecha === hoy()
+        ? 'Hoy no hay nada anotado. Disfrutalo.'
+        : 'Ese día está libre.',
+    }),
+  ]));
+
+  if (conComidas && (comidas.almuerzo || comidas.cena)) {
+    bloques.push(el('section.seccion', {}, [
+      el('header', {}, [el('h2', { texto: 'Ese día se come' })]),
+      el('div.tarjeta.plana', {}, [
+        comidas.almuerzo
+          ? el('p.cuerpo', {}, [
+            el('strong', { texto: 'Almuerzo: ' }),
+            comidas.almuerzo.titulo,
+          ])
+          : null,
+        comidas.cena
+          ? el('p.cuerpo', {
+            estilo: { marginTop: comidas.almuerzo ? '6px' : '0' },
+          }, [el('strong', { texto: 'Cena: ' }), comidas.cena.titulo])
+          : null,
+      ]),
+    ]));
+  }
+
+  if (conTareas && tareas.length) {
+    bloques.push(el('section.seccion', {}, [
+      el('header', {}, [el('h2', { texto: 'Tareas que vencen ese día' })]),
+      el('div', {}, tareas.map((t) => {
+        const p = t.persona_id ? est.persona(t.persona_id) : null;
+        return el('div.fila', {
+          clase: t.hecha ? 'hecha' : '',
+          estilo: p ? { '--tinte': tinte(p) } : {},
+        }, [
+          p ? avatar(p) : icono('tareas', { tamano: 22 }),
+          el('span.cuerpo-fila', {}, [
+            el('span.fila-titulo', { texto: t.titulo }),
+            el('span.fila-sub', { texto: p ? p.nombre : 'De la casa' }),
+          ]),
+          t.hecha ? marca('Hecha', 'hecha') : null,
+        ]);
+      })),
+    ]));
+  }
+
+  return bloques;
+}
+
+// ---------------------------------------------------------------------------
+//  La vista
+// ---------------------------------------------------------------------------
+
+export function vistaAgenda(destino) {
+  const elegida = est.estado.fechaElegida ?? hoy();
+  const modo = est.estado.modoAgenda ?? 'mes';
+
+  const control = el('section.seccion', {}, [
+    segmentado(
+      [
+        { valor: 'mes', texto: 'Mes' },
+        { valor: 'semana', texto: 'Semana' },
+        { valor: 'dia', texto: 'Día' },
+      ],
+      modo,
+      (v) => est.poner({ modoAgenda: v, semanaVisible: elegida }),
+      { etiqueta: 'Cómo ver la agenda' },
+    ),
+    est.estado.personas.length > 1
+      ? el('div', { estilo: { marginTop: '12px' } }, [filtroIntegrantes()])
+      : null,
+  ]);
+
+  const cuerpo = modo === 'semana'
+    ? vistaSemana(elegida)
+    : modo === 'dia'
+      ? vistaDia(elegida)
+      : vistaMes(elegida);
+
+  pintar(destino, control, ...cuerpo);
+
+  return el('button.fab', {
+    type: 'button',
+    'aria-label': 'Anotar algo nuevo',
+    'on:click': () => abrirEditorEvento({ fechaSugerida: elegida }),
+  }, [icono('mas', { tamano: 26, trazo: 2.2 })]);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,23 +558,15 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
   for (const [clave, cat] of Object.entries(CATEGORIAS)) {
     const chip = el('button.chip', {
       type: 'button',
+      texto: cat.nombre,
+      estilo: { '--tinte': cat.color },
       'aria-pressed': String(clave === b.categoria),
       'on:click': () => {
         b.categoria = clave;
-        for (const c of chipsCat.children) {
-          c.setAttribute('aria-pressed', 'false');
-          c.style.borderColor = '';
-          c.style.color = '';
-        }
+        for (const c of chipsCat.children) c.setAttribute('aria-pressed', 'false');
         chip.setAttribute('aria-pressed', 'true');
-        chip.style.borderColor = cat.color;
-        chip.style.color = cat.color;
       },
-    }, [`${cat.emoji} ${cat.nombre}`]);
-    if (clave === b.categoria) {
-      chip.style.borderColor = cat.color;
-      chip.style.color = cat.color;
-    }
+    });
     chipsCat.append(chip);
   }
 
@@ -205,7 +588,7 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
     'on:change': (e) => (b.horaFin = e.target.value),
   });
 
-  const filaHoras = el('div.fila', {}, [
+  const filaHoras = el('div.dos', {}, [
     campo('Empieza', campoHora),
     campo('Termina', campoHoraFin),
   ]);
@@ -260,7 +643,7 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
   // --- de quién es ---
   const opcionesPersona = [
     ['', 'De toda la familia'],
-    ...est.estado.personas.map((p) => [p.id, `${p.emoji} ${p.nombre}`]),
+    ...est.estado.personas.map((p) => [p.id, `${p.emoji ?? ''} ${p.nombre}`.trim()]),
   ];
   const selPersona = elegir(opcionesPersona, b.persona_id, {
     'on:change': (e) => (b.persona_id = e.target.value),
@@ -297,30 +680,28 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
     campo('¿Se repite?', selRepite),
     cajaDias,
     cajaHasta,
-    campo('Avisame', selAviso, 'El aviso llega por el calendario del celular, si lo suscribiste en Más.'),
+    campo('Avisame', selAviso, 'El aviso llega por el calendario del celular, si lo suscribiste en Familia.'),
     campo('¿Dónde?', campoLugar),
     campo('Nota', campoDetalle),
     error,
   ]);
 
   // Acciones de abajo.
-  const acciones = el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+  form.append(el('div.acciones', {}, [
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
     }),
     btnGuardar,
-  ]);
-  form.append(acciones);
+  ]));
 
   // Extras para un evento que ya existe.
   const extras = el('div', { estilo: { marginTop: '14px' } });
   if (!esNuevo) {
     extras.append(
-      el('button.btn.fantasma.ancho.chico', {
+      el('button.btn.linea.ancho.chico', {
         type: 'button',
-        texto: '📲  Agregar al calendario del celular',
         estilo: { marginBottom: '8px' },
         'on:click': () => {
           const p = evento.persona_id ? est.persona(evento.persona_id) : null;
@@ -332,14 +713,13 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
             ),
           );
         },
-      }),
+      }, [icono('bajar', { tamano: 15 }), 'Agregar al calendario del celular']),
     );
 
     if (evento.repite !== 'no' && fecha) {
       extras.append(
-        el('button.btn.fantasma.ancho.chico', {
+        el('button.btn.linea.ancho.chico', {
           type: 'button',
-          texto: `🚫  Esta vez no va (${fechaHumana(fecha)})`,
           estilo: { marginBottom: '8px' },
           'on:click': async () => {
             try {
@@ -351,14 +731,13 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
               avisoMal(db.mensajeDeError(e));
             }
           },
-        }),
+        }, [icono('cerrar', { tamano: 15 }), `Esta vez no va (${fechaHumana(fecha)})`]),
       );
     }
 
     extras.append(
       el('button.btn.peligro.ancho.chico', {
         type: 'button',
-        texto: evento.repite !== 'no' ? '🗑  Borrar todas las veces' : '🗑  Borrar',
         'on:click': async () => {
           const ok = await confirmar({
             titulo: `¿Borrar "${evento.titulo}"?`,
@@ -379,7 +758,10 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
             avisoMal(db.mensajeDeError(e));
           }
         },
-      }),
+      }, [
+        icono('basura', { tamano: 15 }),
+        evento.repite !== 'no' ? 'Borrar todas las veces' : 'Borrar',
+      ]),
     );
   }
 
@@ -453,152 +835,5 @@ export function abrirEditorEvento({ evento = null, fecha = null, fechaSugerida =
         'los cambios se pierden.'
       : null),
     contenido: [form, extras],
-  });
-}
-
-// ---------------------------------------------------------------------------
-//  La vista
-// ---------------------------------------------------------------------------
-
-export function vistaAgenda(destino) {
-  const elegida = est.estado.fechaElegida ?? hoy();
-  const visible = est.estado.mesVisible ?? {
-    anio: partes(elegida).anio,
-    mes: partes(elegida).mes,
-  };
-
-  // --- navegación del mes ---
-  const irAlMes = async (delta) => {
-    let { anio, mes } = visible;
-    mes += delta;
-    if (mes > 12) {
-      mes = 1;
-      anio++;
-    }
-    if (mes < 1) {
-      mes = 12;
-      anio--;
-    }
-    est.estado.mesVisible = { anio, mes };
-    await est.asegurarRango(`${anio}-${String(mes).padStart(2, '0')}-15`);
-    est.avisar();
-  };
-
-  const nav = el('div.mes-nav', {}, [
-    el('button', { type: 'button', 'aria-label': 'Mes anterior', texto: '‹', 'on:click': () => irAlMes(-1) }),
-    el('span.titulo', { texto: conMayuscula(mesLargo(visible.anio, visible.mes)) }),
-    el('button', { type: 'button', 'aria-label': 'Mes siguiente', texto: '›', 'on:click': () => irAlMes(1) }),
-  ]);
-
-  // --- grilla ---
-  const grilla = el('div.grilla', { role: 'grid' });
-  for (const d of [1, 2, 3, 4, 5, 6, 0]) {
-    grilla.append(el('div.dow', { texto: DIAS_CORTOS[d], 'aria-hidden': 'true' }));
-  }
-
-  const dias = grillaMes(visible.anio, visible.mes);
-  for (const { fecha, delMes } of dias) {
-    const inst = est.instanciasDe(fecha);
-    const tieneComida = !!(est.comida(fecha, 'almuerzo') || est.comida(fecha, 'cena'));
-
-    // Un punto por categoría presente, hasta tres, que es lo que entra prolijo.
-    const cats = [...new Set(inst.map((i) => i.evento.categoria))].slice(0, 3);
-
-    const boton = el('button.dia', {
-      type: 'button',
-      clase: [delMes ? '' : 'otro-mes', fecha === hoy() ? 'hoy' : ''].join(' '),
-      'aria-pressed': String(fecha === elegida),
-      'aria-label': `${fechaLarga(fecha)}, ${inst.length} ${inst.length === 1 ? 'cosa' : 'cosas'}`,
-      'on:click': () => est.poner({ fechaElegida: fecha }),
-    }, [
-      el('span', { texto: String(partes(fecha).dia) }),
-      el('span.puntos', {}, cats.map((c) =>
-        el('span.punto', { estilo: { background: categoria(c).color } })
-      )),
-      tieneComida ? el('span.comida', { 'aria-hidden': 'true', texto: '🍽' }) : null,
-    ]);
-    grilla.append(boton);
-  }
-
-  // --- el día elegido ---
-  const instDia = est.instanciasDe(elegida);
-  const comidas = est.comidasDe(elegida);
-
-  const cabeceraDia = el('h2', {}, [
-    fechaHumana(elegida),
-    instDia.length
-      ? el('span.contador', { texto: String(instDia.length) })
-      : null,
-    el('button.btn.chico.fantasma', {
-      type: 'button',
-      texto: '+ Anotar',
-      estilo: { marginLeft: 'auto' },
-      'on:click': () => abrirEditorEvento({ fechaSugerida: elegida }),
-    }),
-  ]);
-
-  const seccionDia = el('section.seccion', {}, [
-    cabeceraDia,
-    el('p.cap', {
-      estilo: {
-        fontSize: '0.78rem',
-        color: 'var(--suave)',
-        marginTop: '-4px',
-        marginBottom: '10px',
-      },
-      texto: fechaLarga(elegida),
-    }),
-    listaEventos(instDia),
-  ]);
-
-  // Qué se come ese día, como recordatorio en la misma pantalla.
-  const seccionComida = (comidas.almuerzo || comidas.cena)
-    ? el('section.seccion', {}, [
-      el('h2', {}, ['Ese día se come']),
-      el('div.tarjeta.plana', {}, [
-        comidas.almuerzo
-          ? el('p', { estilo: { fontSize: '0.88rem' } }, [
-            el('strong', { texto: 'Almuerzo: ' }),
-            comidas.almuerzo.titulo,
-          ])
-          : null,
-        comidas.cena
-          ? el('p', {
-            estilo: { fontSize: '0.88rem', marginTop: comidas.almuerzo ? '6px' : '0' },
-          }, [
-            el('strong', { texto: 'Cena: ' }),
-            comidas.cena.titulo,
-          ])
-          : null,
-      ]),
-    ])
-    : null;
-
-  // --- lo que viene ---
-  const desdeManana = sumarDias(hoy(), 1);
-  const proximas = est.instanciasEnRango(desdeManana, sumarDias(hoy(), 14))
-    .filter((i) => i.fecha !== elegida)
-    .slice(0, 6);
-
-  const seccionProximas = proximas.length
-    ? el('section.seccion', {}, [
-      el('h2', {}, ['Las próximas dos semanas']),
-      el('div', {}, proximas.map((i) => filaEvento(i, { mostrarFecha: true }))),
-    ])
-    : null;
-
-  pintar(destino,
-    el('section.seccion', {}, [nav, grilla]),
-    seccionDia,
-    seccionComida,
-    seccionProximas,
-  );
-
-  // Botón flotante para anotar rápido.
-  return el('button.fab', {
-    type: 'button',
-    'aria-label': 'Anotar algo nuevo',
-    texto: '+',
-    'on:click': () => abrirEditorEvento({ fechaSugerida: elegida }),
   });
 }

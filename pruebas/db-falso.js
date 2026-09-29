@@ -29,7 +29,7 @@ const bd = {
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: 'u1',
       nombre: 'Ana',
-      color: '#8b7cff',
+      color: '#4F7A63',
       emoji: '🧉',
       es_admin: true,
       orden: 0,
@@ -39,7 +39,7 @@ const bd = {
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: 'u2',
       nombre: 'Bruno',
-      color: '#ff9f68',
+      color: '#2C5A66',
       emoji: '🌻',
       es_admin: false,
       orden: 1,
@@ -49,7 +49,7 @@ const bd = {
       hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
       user_id: null,
       nombre: 'Lila',
-      color: '#5bc8ff',
+      color: '#C4674A',
       emoji: '🧒',
       es_admin: false,
       orden: 2,
@@ -59,6 +59,7 @@ const bd = {
   ocurrencias: [],
   menu: [],
   compras: [],
+  tareas: [],
   calendarios: [],
   preferencias: {
     hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
@@ -383,6 +384,63 @@ export async function preferencias() {
 export async function guardarPreferencias(hogarId, cambios) {
   bd.preferencias = { ...bd.preferencias, ...cambios };
   return demora(bd.preferencias);
+}
+
+// --- tareas -----------------------------------------------------------------
+
+export async function tareas() {
+  // Mismo orden que la consulta real: pendientes primero, después por
+  // vencimiento, y las que no tienen fecha al final.
+  const orden = [...bd.tareas].sort((a, b) => {
+    if (a.hecha !== b.hecha) return a.hecha ? 1 : -1;
+    if (!a.vence && !b.vence) return 0;
+    if (!a.vence) return 1;
+    if (!b.vence) return -1;
+    return a.vence < b.vence ? -1 : (a.vence > b.vence ? 1 : 0);
+  });
+  return demora(orden);
+}
+
+export async function guardarTarea(t) {
+  await demora();
+  if (t.id) {
+    const i = bd.tareas.findIndex((x) => x.id === t.id);
+    if (i >= 0) bd.tareas[i] = { ...bd.tareas[i], ...t };
+    return bd.tareas[i];
+  }
+  const fila = {
+    id: uuid(),
+    hecha: false,
+    hecha_en: null,
+    repite: 'no',
+    detalle: null,
+    persona_id: null,
+    vence: null,
+    created_at: new Date().toISOString(),
+    ...t,
+  };
+  bd.tareas.push(fila);
+  return fila;
+}
+
+export async function marcarTarea(id, hecha) {
+  await demora();
+  const t = bd.tareas.find((x) => x.id === id);
+  if (t) {
+    t.hecha = hecha;
+    t.hecha_en = hecha ? new Date().toISOString() : null;
+  }
+  return t;
+}
+
+export async function borrarTarea(id) {
+  await demora();
+  bd.tareas = bd.tareas.filter((t) => t.id !== id);
+}
+
+export async function borrarTareasHechas() {
+  await demora();
+  bd.tareas = bd.tareas.filter((t) => !t.hecha);
 }
 
 // --- calendarios ------------------------------------------------------------

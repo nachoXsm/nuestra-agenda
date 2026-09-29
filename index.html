@@ -1,42 +1,43 @@
 <!DOCTYPE html>
-<html lang="es-AR" data-tema="oscuro">
+<html lang="es-AR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nuestra Agenda</title>
-<meta name="description" content="La agenda de la familia y el menú de la semana, en un solo lugar.">
+<title>juntos</title>
+<meta name="description" content="La agenda de la familia, el menú de la semana y lo que hay que hacer, en un solo lugar.">
 
-<meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f4f5fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111513" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f3ec" media="(prefers-color-scheme: light)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Nuestra Agenda">
+<meta name="apple-mobile-web-app-title" content="juntos">
 
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 
+<!-- Plus Jakarta Sans para todo, e Instrument Serif itálica solo para los
+     saludos y los logros: una vez por pantalla como máximo, dice el manual. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
 <!-- Se pinta el tema guardado antes de que aparezca nada, así no hay un
-     flash blanco al abrir la app de noche. -->
+     flash de marfil al abrir la app de noche. -->
 <script>
   try {
     var t = localStorage.getItem('ag_tema');
     if (t === 'claro' || t === 'oscuro') document.documentElement.dataset.tema = t;
-    else document.documentElement.removeAttribute('data-tema');
   } catch (e) { /* localStorage bloqueado */ }
 </script>
 
 <div id="app">
   <header class="cabecera oculto" id="cabecera">
-    <h1 id="titulo">Nuestra Agenda</h1>
+    <h1 id="titulo">juntos</h1>
     <div id="acciones-cabecera"></div>
   </header>
 
@@ -44,30 +45,16 @@
     <div class="cargando"><span class="ruedita"></span> Abriendo…</div>
   </main>
 
-  <nav class="barra oculto" id="barra" aria-label="Secciones">
-    <button type="button" data-vista="hoy">
-      <span class="ico" aria-hidden="true">☀️</span>Hoy
-    </button>
-    <button type="button" data-vista="agenda">
-      <span class="ico" aria-hidden="true">📅</span>Agenda
-    </button>
-    <button type="button" data-vista="menu">
-      <span class="ico" aria-hidden="true">🍽</span>Menú
-    </button>
-    <button type="button" data-vista="chef">
-      <span class="ico" aria-hidden="true">👩‍🍳</span>Chef
-    </button>
-    <button type="button" data-vista="ajustes">
-      <span class="ico" aria-hidden="true">⚙️</span>Más
-    </button>
-  </nav>
+  <!-- Los botones los arma main.js con los iconos de js/lib/iconos.js, para
+       que el dibujo de cada icono viva en un solo lugar. -->
+  <nav class="barra oculto" id="barra" aria-label="Secciones"></nav>
 </div>
 
 <div id="capas"></div>
 
 <noscript>
-  <div style="padding:40px 24px;text-align:center;font-family:system-ui;color:#f2f4ff">
-    <h1 style="font-size:1.3rem;margin-bottom:12px">Nuestra Agenda</h1>
+  <div style="padding:48px 24px;text-align:center;font-family:system-ui;color:#1b211f">
+    <h1 style="font-size:28px;letter-spacing:-1px;margin-bottom:12px">juntos</h1>
     <p>Esta app necesita JavaScript para funcionar.</p>
   </div>
 </noscript>

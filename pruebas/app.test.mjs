@@ -154,6 +154,19 @@ const irA = async (pagina, vista) => {
   await pagina.waitForTimeout(120);
 };
 
+/** Toca una de las opciones del control segmentado (Mes|Semana|Día, etc.). */
+const solapa = async (pagina, texto) => {
+  await pagina.click(`.segmentado button:has-text("${texto}")`);
+  await pagina.waitForTimeout(200);
+};
+
+/** El Chef no está en la barra: se entra desde Comidas. */
+const irAlChef = async (pagina) => {
+  await irA(pagina, 'comidas');
+  await pagina.click('.fab');
+  await pagina.waitForTimeout(250);
+};
+
 const bd = (pagina, fn) => pagina.evaluate(fn);
 
 const hoyISO = () =>
@@ -185,9 +198,13 @@ prueba('la app abre sin un solo error de JavaScript', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
   // Se recorren las cinco secciones: es donde se rompen los imports.
-  for (const v of ['hoy', 'agenda', 'menu', 'chef', 'ajustes']) {
+  for (const v of ['inicio', 'agenda', 'comidas', 'tareas', 'familia']) {
     await irA(pagina, v);
   }
+  // Y las tres alturas de la agenda, que cada una arma cosas distintas.
+  await irA(pagina, 'agenda');
+  for (const modo of ['Semana', 'Día', 'Mes']) await solapa(pagina, modo);
+  await irAlChef(pagina);
   await pagina.waitForTimeout(300);
 
   igual(errores, [], 'hubo errores de JavaScript');
@@ -198,7 +215,7 @@ prueba('la app abre sin un solo error de JavaScript', async (nav) => {
   await contexto.close();
 });
 
-prueba('Hoy muestra lo de hoy y lo de mañana', async (nav) => {
+prueba('Inicio muestra lo de hoy y lo que se viene', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav, {
     semilla: {
       eventos: [
@@ -239,10 +256,12 @@ prueba('Hoy muestra lo de hoy y lo de mañana', async (nav) => {
   // text-transform: uppercase, e innerText devuelve el texto ya transformado.
   const texto = await pagina.textContent('#main');
   afirmar(texto.includes('Clase de natación'), 'falta el evento de hoy');
+  afirmar(texto.includes('Actividades de hoy'), 'falta la sección de hoy');
+  // Lo de mañana está a la vista sin tocar nada: enterarse el mismo día de que
+  // hay un acto en el colegio ya es tarde, y por eso está en Inicio.
   afirmar(texto.includes('Acto del colegio'), 'falta el evento de mañana');
-  afirmar(texto.includes('Mañana'), 'falta la sección de mañana');
-  // El evento de hoy que todavía no pasó aparece como "lo que sigue".
-  afirmar(texto.includes('Lo que sigue'), 'falta la tarjeta de lo que sigue');
+  afirmar(texto.includes('Lo que se viene'), 'falta la sección de lo que viene');
+  afirmar(texto.includes('Hoy en familia'), 'falta la tarjeta de cómo viene el día');
 
   igual(errores, [], 'hubo errores de JavaScript');
   await contexto.close();
@@ -303,22 +322,291 @@ prueba('un evento semanal se repite en el calendario', async (nav) => {
   });
 
   await irA(pagina, 'agenda');
-  await pagina.waitForTimeout(200);
+  await solapa(pagina, 'Semana');
 
-  // La misma semana que viene tiene que tener el evento.
-  const dentroDeUnaSemana = enDias(7);
-  await pagina.evaluate((f) => {
-    globalThis.NuestraAgenda.estado.fechaElegida = f;
-  }, dentroDeUnaSemana);
-  await pagina.click(`#barra button[data-vista="hoy"]`);
-  await irA(pagina, 'agenda');
-  await pagina.waitForTimeout(200);
-
-  const proximas = await pagina.textContent('#main');
   afirmar(
-    (proximas.match(/Natación/g) ?? []).length >= 2,
-    'un evento semanal tiene que aparecer más de una vez en las próximas dos semanas',
+    (await pagina.textContent('#main')).includes('Natación'),
+    'esta semana tiene que tener el evento',
   );
+
+  // Y la que viene también, sin haber cargado nada más.
+  await pagina.click('.mes-nav button[aria-label="Semana siguiente"]');
+  await pagina.waitForTimeout(300);
+  afirmar(
+    (await pagina.textContent('#main')).includes('Natación'),
+    'un evento semanal tiene que volver a aparecer la semana siguiente',
+  );
+
+  // Y dos semanas más adelante sigue.
+  await pagina.click('.mes-nav button[aria-label="Semana siguiente"]');
+  await pagina.waitForTimeout(300);
+  afirmar(
+    (await pagina.textContent('#main')).includes('Natación'),
+    'y la siguiente',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('la agenda se mira por mes, por semana y por día', async (nav) => {
+  // Es el pedido central de esta versión: ver los eventos escritos en el
+  // calendario, no puntitos, y poder abrir la semana y el día.
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      eventos: [
+        {
+          id: 'e1',
+          hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+          titulo: 'Natación',
+          categoria: 'hijo',
+          inicio: `${hoyISO()}T19:00:00-03:00`,
+          fin: null,
+          todo_el_dia: false,
+          persona_id: 'p3',
+          repite: 'no',
+          repite_dias: [],
+          repite_hasta: null,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: 'e2',
+          hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+          titulo: 'Gimnasia',
+          categoria: 'otro',
+          inicio: `${enDias(2)}T08:00:00-03:00`,
+          fin: null,
+          todo_el_dia: false,
+          persona_id: 'p2',
+          repite: 'no',
+          repite_dias: [],
+          repite_hasta: null,
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  await irA(pagina, 'agenda');
+  await pagina.waitForTimeout(250);
+
+  // --- mes: el título del evento se lee dentro de la celda, sin tocar nada ---
+  const minis = await pagina.$$eval('.dia-celda .mini', (ns) =>
+    ns.map((n) => n.textContent.trim())
+  );
+  afirmar(
+    minis.some((t) => t.includes('Natación')),
+    `el mes tiene que mostrar el título del evento, no un punto: ${JSON.stringify(minis)}`,
+  );
+  afirmar(
+    minis.some((t) => t.includes('Gimnasia')),
+    'los eventos de otros días también',
+  );
+
+  // --- semana: los siete días abiertos ---
+  await solapa(pagina, 'Semana');
+  const grupos = await pagina.$$('.dia-grupo');
+  igual(grupos.length, 7, 'la semana tiene que abrir los siete días');
+  const textoSemana = await pagina.textContent('#main');
+  afirmar(textoSemana.includes('Natación'), 'falta el evento en la vista semanal');
+
+  // --- día: solo ese día, con la hora a la izquierda ---
+  await solapa(pagina, 'Día');
+  const textoDia = await pagina.textContent('#main');
+  afirmar(textoDia.includes('Natación'), 'falta el evento de hoy en la vista diaria');
+  afirmar(
+    !textoDia.includes('Gimnasia'),
+    'la vista de día no puede mostrar lo de otros días',
+  );
+  afirmar(
+    (await pagina.innerText('.fila .horas')).includes('19:00'),
+    'la hora tiene que verse a la izquierda',
+  );
+
+  // Y se puede caminar al día siguiente con la flecha.
+  await pagina.click('.mes-nav button[aria-label="Día siguiente"]');
+  await pagina.waitForTimeout(250);
+  afirmar(
+    !(await pagina.textContent('#main')).includes('Natación'),
+    'la flecha tiene que cambiar de día',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('el filtro por integrante deja solo lo de esa persona', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      eventos: [
+        {
+          id: 'e1',
+          hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+          titulo: 'Natación de Lila',
+          categoria: 'hijo',
+          inicio: `${hoyISO()}T19:00:00-03:00`,
+          fin: null,
+          todo_el_dia: false,
+          persona_id: 'p3',
+          repite: 'no',
+          repite_dias: [],
+          repite_hasta: null,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: 'e2',
+          hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+          titulo: 'Reunión de Ana',
+          categoria: 'trabajo',
+          inicio: `${hoyISO()}T11:00:00-03:00`,
+          fin: null,
+          todo_el_dia: false,
+          persona_id: 'p1',
+          repite: 'no',
+          repite_dias: [],
+          repite_hasta: null,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: 'e3',
+          hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+          titulo: 'Cumple de la abuela',
+          categoria: 'cumple',
+          inicio: `${hoyISO()}T13:00:00-03:00`,
+          fin: null,
+          todo_el_dia: true,
+          persona_id: null,
+          repite: 'no',
+          repite_dias: [],
+          repite_hasta: null,
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  await irA(pagina, 'agenda');
+  await solapa(pagina, 'Día');
+
+  let texto = await pagina.textContent('#main');
+  afirmar(texto.includes('Natación de Lila'), 'sin filtro está todo');
+  afirmar(texto.includes('Reunión de Ana'), 'sin filtro está todo');
+
+  await pagina.click('.chips button:has-text("Lila")');
+  await pagina.waitForTimeout(250);
+
+  texto = await pagina.textContent('#main');
+  afirmar(texto.includes('Natación de Lila'), 'lo de Lila tiene que quedar');
+  afirmar(!texto.includes('Reunión de Ana'), 'lo de Ana tiene que salir');
+  // Lo que es de toda la familia le toca a todos, así que no se filtra.
+  afirmar(
+    texto.includes('Cumple de la abuela'),
+    'lo que es de todos tiene que quedar aunque se filtre por una persona',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('se anota una tarea, se tilda y suma al progreso de la semana', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  await irA(pagina, 'tareas');
+  await pagina.click('.fab');
+  await pagina.waitForSelector('.hoja');
+
+  await pagina.fill('.hoja input[type="text"]', 'Pagar el gas');
+  // p1 es Ana, la primera persona del hogar de prueba.
+  await pagina.selectOption('.hoja select', 'p1');
+  await pagina.fill('.hoja input[type="date"]', hoyISO());
+  await pagina.click('.hoja button[type="submit"]');
+  await pagina.waitForSelector('.hoja', { state: 'detached', timeout: 5000 });
+  await pagina.waitForTimeout(300);
+
+  const guardadas = await bd(pagina, () => globalThis.__falso.tareas);
+  igual(guardadas.length, 1, 'tenía que guardarse la tarea');
+  igual(guardadas[0].titulo, 'Pagar el gas', 'el título');
+  igual(guardadas[0].persona_id, 'p1', 'de quién es');
+
+  let texto = await pagina.textContent('#main');
+  afirmar(texto.includes('Pagar el gas'), 'la tarea tiene que verse');
+  afirmar(texto.includes('Vence hoy'), 'la que vence hoy se marca');
+  afirmar(texto.includes('0%'), `el anillo arranca en 0%: ${texto.slice(0, 80)}`);
+
+  // Tildarla no abre el editor: la marca hecha.
+  await pagina.click('.fila:has-text("Pagar el gas") .tilde');
+  await pagina.waitForTimeout(400);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.tareas[0].hecha),
+    true,
+    'el tilde tiene que marcarla hecha',
+  );
+  afirmar(!(await pagina.isVisible('.hoja')), 'el tilde no puede abrir el editor');
+
+  texto = await pagina.textContent('#main');
+  afirmar(texto.includes('100%'), `el anillo tiene que llegar a 100%: ${texto.slice(0, 80)}`);
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('una tarea que se repite deja la siguiente al tildarla', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      tareas: [{
+        id: 't1',
+        hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+        titulo: 'Sacar la basura',
+        detalle: null,
+        persona_id: null,
+        vence: hoyISO(),
+        hecha: false,
+        hecha_en: null,
+        repite: 'semanal',
+        created_at: new Date().toISOString(),
+      }],
+    },
+  });
+
+  await irA(pagina, 'tareas');
+  await pagina.waitForTimeout(250);
+  await pagina.click('.fila:has-text("Sacar la basura") .tilde');
+  await pagina.waitForTimeout(500);
+
+  const tareas = await bd(pagina, () => globalThis.__falso.tareas);
+  igual(tareas.length, 2, 'tenía que nacer la de la semana que viene');
+  const nueva = tareas.find((t) => !t.hecha);
+  afirmar(nueva, 'la nueva tiene que quedar pendiente');
+  igual(nueva.vence, enDias(7), 'una semana después');
+  igual(nueva.repite, 'semanal', 'y sigue repitiendo');
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('Inicio avisa de las tareas atrasadas', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      tareas: [{
+        id: 't1',
+        hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+        titulo: 'Renovar la obra social',
+        detalle: null,
+        persona_id: 'p1',
+        vence: enDias(-3),
+        hecha: false,
+        hecha_en: null,
+        repite: 'no',
+        created_at: new Date().toISOString(),
+      }],
+    },
+  });
+  await pagina.waitForTimeout(300);
+
+  const texto = await pagina.textContent('#main');
+  afirmar(texto.includes('Importante'), 'tiene que salir el aviso de lo atrasado');
+  afirmar(texto.includes('Renovar la obra social'), 'y la tarea en la lista');
 
   igual(errores, [], 'hubo errores de JavaScript');
   await contexto.close();
@@ -345,7 +633,7 @@ prueba('marcar algo como hecho se guarda', async (nav) => {
   });
   await pagina.waitForTimeout(250);
 
-  await pagina.click('.evento .tilde');
+  await pagina.click('.fila .tilde');
   await pagina.waitForTimeout(300);
 
   const ocurrencias = await bd(pagina, () => globalThis.__falso.ocurrencias);
@@ -354,12 +642,12 @@ prueba('marcar algo como hecho se guarda', async (nav) => {
   igual(ocurrencias[0].fecha, hoyISO(), 'la fecha de la ocurrencia');
 
   afirmar(
-    await pagina.isVisible('.evento.hecho'),
+    await pagina.isVisible('.fila.hecha'),
     'el evento tiene que verse tachado',
   );
 
   // Y destildar lo borra.
-  await pagina.click('.evento .tilde');
+  await pagina.click('.fila .tilde');
   await pagina.waitForTimeout(300);
   igual(
     await bd(pagina, () => globalThis.__falso.ocurrencias.length),
@@ -374,7 +662,7 @@ prueba('marcar algo como hecho se guarda', async (nav) => {
 prueba('el menú se carga desde el recetario y respeta la temporada', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'menu');
+  await irA(pagina, 'comidas');
 
   // La tarjeta de temporada tiene que mostrar la estación correcta.
   const mes = Number(hoyISO().slice(5, 7));
@@ -450,7 +738,7 @@ prueba('el menú se vuelca a la lista de compras agrupado por comercio', async (
       ],
     },
   });
-  await irA(pagina, 'menu');
+  await irA(pagina, 'comidas');
   await pagina.waitForTimeout(200);
 
   await pagina.click('button:has-text("A la lista")');
@@ -488,10 +776,8 @@ prueba('tildar algo en la lista de compras lo pasa a comprado', async (nav) => {
       }],
     },
   });
-  await pagina.evaluate(() => globalThis.NuestraAgenda && null);
-  await irA(pagina, 'ajustes');
-  await pagina.click('button:has-text("Lista de compras")');
-  await pagina.waitForTimeout(300);
+  await irA(pagina, 'comidas');
+  await solapa(pagina, 'Lista de compras');
 
   await pagina.click('.compra:has-text("Pan")');
   await pagina.waitForTimeout(350);
@@ -523,7 +809,7 @@ prueba('el agente recibe la temporada, las preferencias y la agenda', async (nav
       }],
     },
   });
-  await irA(pagina, 'chef');
+  await irAlChef(pagina);
   await pagina.waitForTimeout(400);
 
   await pagina.fill('.chat-entrada textarea', '¿Qué cocino mañana?');
@@ -595,7 +881,7 @@ prueba('el menú que propone el agente se revisa antes de cargarlo', async (nav)
       },
     },
   });
-  await irA(pagina, 'chef');
+  await irAlChef(pagina);
   await pagina.waitForTimeout(400);
 
   await pagina.click('button:has-text("Armar")');
@@ -643,7 +929,7 @@ prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
     globalThis.__falso.fallarProximo = 'chefChat';
   });
 
-  await irA(pagina, 'chef');
+  await irAlChef(pagina);
   await pagina.waitForTimeout(400);
   await pagina.fill('.chat-entrada textarea', '¿qué cocino?');
   await pagina.click('.chat-entrada button');
@@ -672,7 +958,7 @@ prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
   );
 
   // Y el menú también.
-  await irA(pagina, 'menu');
+  await irA(pagina, 'comidas');
   await pagina.waitForTimeout(200);
   await pagina.click('.dia-menu .comida-slot.vacia');
   await pagina.waitForSelector('.hoja');
@@ -695,7 +981,7 @@ prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
 prueba('el link del calendario lleva el hogar y el token', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.click('button:has-text("Suscribir el calendario")');
   await pagina.waitForSelector('.link-feed');
 
@@ -748,7 +1034,7 @@ prueba('se importa un calendario .ics y sus eventos entran a la agenda', async (
     globalThis.__falso.icsRemoto = texto;
   }, ics);
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.click('button:has-text("Importar un calendario")');
   await pagina.waitForSelector('.hoja');
 
@@ -794,7 +1080,7 @@ prueba('se importa un calendario .ics y sus eventos entran a la agenda', async (
 prueba('sumar a un hijo sin cuenta', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.click('button:has-text("Sumar a alguien de la familia")');
   await pagina.waitForSelector('.hoja');
 
@@ -899,7 +1185,7 @@ prueba('el nombre de un hijo no se interpreta como HTML', async (nav) => {
   // Si en algún lado se arma HTML pegando texto, esto lo destapa.
   const maligno = '<img src=x onerror="window.__hackeado=1">Juana';
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.click('button:has-text("Sumar a alguien de la familia")');
   await pagina.waitForSelector('.hoja');
   await pagina.fill('.hoja input[type="text"]', maligno);
@@ -929,7 +1215,7 @@ prueba('lo que devuelve el agente tampoco se interpreta como HTML', async (nav) 
       'Probá esto <img src=x onerror="window.__hackeado=1"> y **avisame**';
   });
 
-  await irA(pagina, 'chef');
+  await irAlChef(pagina);
   await pagina.waitForTimeout(400);
   await pagina.fill('.chat-entrada textarea', 'hola');
   await pagina.click('.chat-entrada button');
@@ -953,7 +1239,7 @@ prueba('lo que devuelve el agente tampoco se interpreta como HTML', async (nav) 
 prueba('el tema claro y el oscuro se aplican y se recuerdan', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.selectOption('.lista-ajustes select', 'claro');
   await pagina.waitForTimeout(200);
 
@@ -975,7 +1261,7 @@ prueba('el tema claro y el oscuro se aplican y se recuerdan', async (nav) => {
     'el tema tiene que sobrevivir a recargar',
   );
 
-  await irA(pagina, 'ajustes');
+  await irA(pagina, 'familia');
   await pagina.selectOption('.lista-ajustes select', 'oscuro');
   await pagina.waitForTimeout(200);
   const fondoOscuro = await pagina.evaluate(() =>
@@ -1010,7 +1296,7 @@ prueba('nada se sale de la pantalla a lo ancho', async (nav) => {
     },
   });
 
-  for (const v of ['hoy', 'agenda', 'menu', 'chef', 'ajustes']) {
+  for (const v of ['inicio', 'agenda', 'comidas', 'tareas', 'familia']) {
     await irA(pagina, v);
     await pagina.waitForTimeout(150);
     const desborde = await pagina.evaluate(() =>
@@ -1046,41 +1332,66 @@ prueba('se puede tocar todo con el pulgar (44px de mínimo)', async (nav) => {
 prueba('el botón de atrás del celular navega entre secciones', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'menu');
-  await irA(pagina, 'chef');
-  igual(await pagina.evaluate(() => location.hash), '#chef', 'el hash sigue a la vista');
+  await irA(pagina, 'comidas');
+  await irA(pagina, 'tareas');
+  igual(await pagina.evaluate(() => location.hash), '#tareas', 'el hash sigue a la vista');
 
   await pagina.goBack();
   await pagina.waitForTimeout(250);
-  igual(await pagina.evaluate(() => location.hash), '#menu', 'atrás vuelve al menú');
+  igual(await pagina.evaluate(() => location.hash), '#comidas', 'atrás vuelve a Comidas');
   afirmar(
-    (await pagina.textContent('#titulo')).includes('Menú'),
-    'y la pantalla tiene que ser la del menú',
+    (await pagina.textContent('#titulo')).includes('Comidas'),
+    'y la pantalla tiene que ser la de Comidas',
   );
 
   igual(errores, [], 'hubo errores de JavaScript');
   await contexto.close();
 });
 
-prueba('el botón de atrás también funciona desde la lista de compras', async (nav) => {
-  // La lista de compras no está en la barra de abajo: se llega desde otras
-  // pantallas. Si esas pantallas cambiaran la vista sin tocar el historial, el
-  // botón de atrás saltearía una pantalla o cerraría la app.
+prueba('el botón de atrás también funciona desde el Chef', async (nav) => {
+  // El Chef no está en la barra de abajo: se llega desde Comidas. Si esa
+  // pantalla cambiara la vista sin tocar el historial, el botón de atrás
+  // saltearía una pantalla o cerraría la app.
   const { pagina, contexto, errores } = await abrirApp(nav);
 
-  await irA(pagina, 'ajustes');
-  await pagina.click('button:has-text("Lista de compras")');
-  await pagina.waitForTimeout(300);
+  await irAlChef(pagina);
 
-  igual(await pagina.evaluate(() => location.hash), '#compras', 'el hash sigue a la vista');
+  igual(await pagina.evaluate(() => location.hash), '#chef', 'el hash sigue a la vista');
   afirmar(
-    (await pagina.textContent('#titulo')).includes('Lista de compras'),
-    'tiene que estar en la lista de compras',
+    (await pagina.textContent('#titulo')).includes('Chef'),
+    'tiene que estar en el Chef',
+  );
+  // Aunque el Chef no tenga botón propio, la barra sigue marcando Comidas, que
+  // es de donde se vino.
+  afirmar(
+    await pagina.isVisible('#barra button[data-vista="comidas"][aria-current="page"]'),
+    'la barra tiene que seguir marcando Comidas',
   );
 
   await pagina.goBack();
   await pagina.waitForTimeout(300);
-  igual(await pagina.evaluate(() => location.hash), '#ajustes', 'atrás vuelve a Más');
+  igual(await pagina.evaluate(() => location.hash), '#comidas', 'atrás vuelve a Comidas');
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('los links viejos de las secciones siguen andando', async (nav) => {
+  // Alguien puede tener un acceso directo a #menu en la pantalla de inicio del
+  // celular desde antes de que la sección se llamara Comidas.
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    antesDeCargar: async (p) => {
+      await p.addInitScript(() => {
+        location.hash = 'menu';
+      });
+    },
+  });
+  await pagina.waitForTimeout(250);
+
+  afirmar(
+    (await pagina.textContent('#titulo')).includes('Comidas'),
+    '#menu tiene que abrir Comidas',
+  );
 
   igual(errores, [], 'hubo errores de JavaScript');
   await contexto.close();
@@ -1157,7 +1468,13 @@ function chromiumDelSistema() {
   return existsSync(ruta) ? ruta : undefined;
 }
 
-const navegador = await chromium.launch({ executablePath: chromiumDelSistema() });
+// --lang: los <input type=date|time> los dibuja el navegador con SU idioma, no
+// con el locale del contexto. Sin esto se ven en formato de Estados Unidos
+// (09/29/2026, 07:00 PM), que no es lo que ve alguien en Buenos Aires.
+const navegador = await chromium.launch({
+  executablePath: chromiumDelSistema(),
+  args: ['--lang=es-AR'],
+});
 
 let pasaron = 0;
 const fallaron = [];

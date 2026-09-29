@@ -9,6 +9,8 @@
 //  vino de la base. Todo lo que escribió una persona entra por textContent. Si
 //  alguien llama a un hijo "<script>", tiene que verse ese nombre, no ejecutarse.
 // ============================================================================
+import { iniciales, tinte } from '../data/paleta.js';
+import { icono } from './iconos.js';
 
 /**
  * Crea un elemento.
@@ -34,7 +36,13 @@ export function el(etiqueta, props = {}, hijos = []) {
       // Solo para marcado que armamos nosotros, nunca para datos de la base.
       nodo.innerHTML = valor;
     } else if (clave === 'estilo') {
-      Object.assign(nodo.style, valor);
+      for (const [prop, v] of Object.entries(valor)) {
+        // Las variables CSS (--tinte) NO se pueden asignar como propiedad del
+        // objeto style: hay que pasar por setProperty. Con Object.assign se
+        // pierden en silencio, que es peor que fallar.
+        if (prop.startsWith('--')) nodo.style.setProperty(prop, v);
+        else nodo.style[prop] = v;
+      }
     } else if (clave === 'datos') {
       Object.assign(nodo.dataset, valor);
     } else if (clave.startsWith('on:')) {
@@ -187,7 +195,7 @@ export function confirmar({
         if (!respondido) resolver(false);
       },
       contenido: el('div.acciones', {}, [
-        el('button.btn.fantasma', {
+        el('button.btn.linea', {
           type: 'button',
           texto: noTexto,
           'on:click': () => responder(false),
@@ -215,11 +223,116 @@ export function huesos(cuantos = 3) {
   return el('div', {}, Array.from({ length: cuantos }, () => el('div.hueso')));
 }
 
-export function vacio(emoji, texto, accion) {
+/**
+ * Pantalla vacía. El primer argumento es el nombre de un icono de iconos.js,
+ * no un emoji: el emoji lo dibuja cada sistema a su manera y ninguno de ellos
+ * se parece al resto de la app.
+ */
+export function vacio(nombreIcono, texto, accion) {
   return el('div.vacio', {}, [
-    el('span.emoji', { 'aria-hidden': 'true', texto: emoji }),
+    icono(nombreIcono, { tamano: 40, trazo: 1.6 }),
     el('p', { texto }),
     accion ? el('div', { estilo: { marginTop: '18px' } }, [accion]) : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+//  Piezas del sistema visual
+// ---------------------------------------------------------------------------
+
+/**
+ * El círculo de un integrante. Lleva su emoji si eligió uno, y si no las
+ * iniciales del nombre. El color va como variable --tinte y no como fondo
+ * fijo, para que el CSS saque de ahí el fondo y el color de texto según el
+ * tema: el mismo verde que se lee sobre marfil no se lee sobre negro.
+ */
+export function avatar(persona, { tamano = '' } = {}) {
+  return el('span.avatar', {
+    clase: tamano,
+    texto: persona?.emoji || iniciales(persona?.nombre),
+    title: persona?.nombre ?? '',
+    estilo: { '--tinte': tinte(persona) },
+  });
+}
+
+/** Varios avatares encimados, con un "+2" si no entran todos. */
+export function pila(personas, { max = 4, tamano = 'chico' } = {}) {
+  const muestra = personas.slice(0, max);
+  const resto = personas.length - muestra.length;
+  return el('span.pila', {}, [
+    ...muestra.map((p) => avatar(p, { tamano })),
+    resto > 0 ? el('span.avatar', { clase: tamano, texto: `+${resto}` }) : null,
+  ]);
+}
+
+/**
+ * El control de Mes | Semana | Día, y el de Menú | Compras.
+ * @param {Array} opciones  [{ valor, texto }]
+ */
+export function segmentado(opciones, valor, alElegir, { etiqueta = '' } = {}) {
+  const cont = el('div.segmentado', { role: 'group', 'aria-label': etiqueta });
+  for (const o of opciones) {
+    cont.append(el('button', {
+      type: 'button',
+      texto: o.texto,
+      'aria-pressed': String(o.valor === valor),
+      'on:click': () => {
+        if (o.valor !== valor) alElegir(o.valor);
+      },
+    }));
+  }
+  return cont;
+}
+
+/** Una marquita de estado: "Vence hoy", "Hecha", "Del menú". */
+export function marca(texto, tipo = 'pendiente') {
+  return el('span.marca', { clase: tipo, texto });
+}
+
+/**
+ * El anillo de progreso de Tareas.
+ * @param {number} porcentaje  0 a 100
+ * @param {Array}  contenido   lo que va al lado del anillo
+ */
+export function anillo(porcentaje, contenido = []) {
+  const pct = Math.max(0, Math.min(100, Math.round(porcentaje)));
+  const RADIO = 32;
+  const VUELTA = 2 * Math.PI * RADIO;
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 76 76');
+  svg.setAttribute('aria-hidden', 'true');
+
+  // Dos círculos: el del fondo entero, y encima el del avance recortado con
+  // stroke-dasharray. El CSS lo rota -90° para que arranque arriba.
+  for (const [color, largo] of [
+    ['var(--superficie-2)', VUELTA],
+    ['var(--primario)', (VUELTA * pct) / 100],
+  ]) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', '38');
+    c.setAttribute('cy', '38');
+    c.setAttribute('r', String(RADIO));
+    c.setAttribute('fill', 'none');
+    c.setAttribute('stroke', color);
+    c.setAttribute('stroke-width', '7');
+    c.setAttribute('stroke-linecap', 'round');
+    c.setAttribute('stroke-dasharray', `${largo} ${VUELTA}`);
+    svg.append(c);
+  }
+
+  return el('div.anillo', {}, [
+    el('div.grafico', {}, [svg, el('span.pct', { texto: `${pct}%` })]),
+    el('div', { estilo: { flex: '1', minWidth: '0' } }, [].concat(contenido)),
+  ]);
+}
+
+/** Una sección con su título y, si hace falta, una acción a la derecha. */
+export function seccion(titulo, contenido, accion = null) {
+  return el('section.seccion', {}, [
+    titulo ? el('header', {}, [el('h2', { texto: titulo }), accion]) : null,
+    ...[].concat(contenido).filter(Boolean),
   ]);
 }
 

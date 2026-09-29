@@ -1,4 +1,4 @@
-# Poner a andar Nuestra Agenda
+# Poner a andar *juntos*
 
 Unos 15 minutos. No hace falta instalar nada en la computadora: se hace todo
 desde el navegador, con las cuentas de GitHub y Supabase que ya tenés.
@@ -19,9 +19,9 @@ proyecto.
 
 Si vas a reusar el proyecto de **Nuestras Finanzas**, no hay un solo choque:
 
-| | Nuestras Finanzas | Nuestra Agenda |
+| | Nuestras Finanzas | juntos |
 |---|---|---|
-| Tablas | `grupos`, `gastos`, `ingresos`, `tarjetas` | `ag_*` (diez tablas) |
+| Tablas | `grupos`, `gastos`, `ingresos`, `tarjetas` | `ag_*` (once tablas) |
 | Funciones SQL | — | `ag_*` |
 | Edge Functions | `ai-advisor`, `send-invite` | `chef-ia`, `ics-proxy`, `ics-feed` |
 
@@ -215,11 +215,11 @@ Queda como una app más, con su ícono y sin la barra del navegador.
 
 1. Creá tu cuenta con tu mail.
 2. **Crear nuestro hogar**, ponele nombre, elegí tu color.
-3. Andá a **Más** → **Invitar** y pasale el código de 6 letras a tu pareja. Ella
-   se crea su cuenta y entra con ese código.
-4. **Más** → **Sumar a alguien de la familia** para cargar a tu hijo. No necesita
-   cuenta: es para poder decir de quién es cada evento.
-5. **Más** → **Suscribir el calendario del teléfono**. Hacelo en los dos
+3. Andá a **Familia** → **Invitar** y pasale el código de 6 letras a tu pareja.
+   Ella se crea su cuenta y entra con ese código.
+4. **Familia** → **Sumar a alguien de la familia** para cargar a tu hijo. No
+   necesita cuenta: es para poder decir de quién es cada evento y cada tarea.
+5. **Familia** → **Suscribir el calendario del teléfono**. Hacelo en los dos
    celulares. **Este es el paso que hace que la app sirva para no olvidarse las
    cosas**: a partir de acá los recordatorios los da el calendario del sistema.
 
@@ -229,6 +229,12 @@ Queda como una app más, con su ícono y sin la barra del navegador.
 
 **"No se pudieron traer los datos"** — falta correr el `schema.sql` del paso 2,
 o la URL o la clave están mal en `config.js`.
+
+**La sección Tareas da error** — es la tabla `ag_tareas`, que se sumó después.
+Volvé a correr el `schema.sql` entero: es idempotente, así que pasarlo de nuevo
+sobre una base que ya tiene el resto no toca nada de lo que ya está, solo agrega
+lo que falta. Para quedarte tranquilo, después corré `supabase/verificar.sql`:
+tiene que decir "las 11 tablas están" y que Finanzas sigue intacta.
 
 **No llega el mail de confirmación** — apagá *Confirm email* (paso 3). El
 servidor de prueba de Supabase casi no manda mails.
@@ -258,4 +264,6 @@ Las pruebas corren sin ningún servicio de afuera:
 ./supabase/tests/run.sh          # el esquema y el RLS, sobre un Postgres real
 deno task test                   # las funciones y las librerías
 node pruebas/app.test.mjs        # la app entera, en un Chromium real
+node pruebas/capturas.mjs        # las capturas del README
+node pruebas/iconos-png.mjs      # los PNG del manifest, desde los SVG
 ```

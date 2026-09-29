@@ -10,11 +10,11 @@
 -- ============================================================================
 
 with
--- Las diez tablas que tiene que haber creado schema.sql.
+-- Las once tablas que tiene que haber creado schema.sql.
 esperadas(t) as (
   values ('ag_hogares'), ('ag_personas'), ('ag_eventos'), ('ag_ocurrencias'),
-         ('ag_menu'), ('ag_compras'), ('ag_calendarios'), ('ag_preferencias'),
-         ('ag_recetas'), ('ag_chef_mensajes')
+         ('ag_menu'), ('ag_compras'), ('ag_tareas'), ('ag_calendarios'),
+         ('ag_preferencias'), ('ag_recetas'), ('ag_chef_mensajes')
 ),
 tablas as (
   select e.t,
@@ -32,11 +32,26 @@ funciones(f) as (
   values ('ag_crear_hogar'), ('ag_unirse_a_hogar'), ('ag_es_miembro'),
          ('ag_es_admin'), ('ag_codigo_nuevo'), ('ag_menu_a_compras'),
          ('ag_regenerar_feed_token')
+),
+-- Las cuatro tablas de Nuestras Finanzas, contadas de forma dinámica: si
+-- alguna no existiera, un "select count(*) from grupos" escrito a mano haría
+-- fallar TODA la consulta con "relation does not exist" en vez de mostrar el
+-- informe. Así, la que falta sale en null y el informe se ve igual.
+finanzas(t, n) as (
+  select v.t,
+         case when to_regclass('public.' || v.t) is null then null
+           else (xpath(
+             '/row/c/text()',
+             query_to_xml(format('select count(*) as c from public.%I', v.t),
+                          false, true, '')
+           ))[1]::text::bigint
+         end
+  from (values ('grupos'), ('gastos'), ('ingresos'), ('tarjetas')) v(t)
 )
 
 select * from (
 
-  -- 1. ¿Están las diez tablas?
+  -- 1. ¿Están las once tablas?
   select 1 as orden,
          'Tablas de la agenda' as revisión,
          case when count(*) filter (where oid is null) = 0
@@ -51,8 +66,8 @@ select * from (
   select 2,
          'Seguridad (RLS) prendida',
          case when count(*) filter (where oid is not null and not rls) = 0
-                   and count(*) filter (where oid is not null) = 10
-              then '✅ OK — las 10 tablas protegidas'
+                   and count(*) filter (where oid is not null) = 11
+              then '✅ OK — las 11 tablas protegidas'
               else '❌ SIN PROTEGER: ' ||
                    coalesce(string_agg(t, ', ') filter (where oid is not null and not rls),
                             '(faltan tablas)')
@@ -65,7 +80,7 @@ select * from (
   select 3,
          'Políticas de acceso',
          case when count(*) filter (where oid is not null and politicas = 0) = 0
-                   and count(*) filter (where oid is not null) = 10
+                   and count(*) filter (where oid is not null) = 11
               then '✅ OK — ' || sum(politicas) || ' políticas en total'
               else '❌ SIN POLÍTICAS: ' ||
                    coalesce(string_agg(t, ', ') filter (where oid is not null and politicas = 0),
@@ -96,25 +111,22 @@ select * from (
   -- 5. Lo importante para quedarse tranquilo: Nuestras Finanzas sigue entera.
   select 5,
          'Nuestras Finanzas intacta',
-         case when count(*) = 4
+         case when count(*) filter (where n is not null) = 4
               then '✅ OK — grupos, gastos, ingresos y tarjetas siguen ahí'
-              else '⚠️ Solo encontré ' || count(*) || ' de 4 tablas: ' ||
-                   coalesce(string_agg(relname, ', '), 'ninguna')
+              else '⚠️ Solo encontré ' || count(*) filter (where n is not null) ||
+                   ' de 4 tablas. Faltan: ' ||
+                   coalesce(string_agg(t, ', ') filter (where n is null), 'ninguna')
          end
-  from pg_class
-  where relnamespace = 'public'::regnamespace
-    and relkind = 'r'
-    and relname in ('grupos', 'gastos', 'ingresos', 'tarjetas')
+  from finanzas
 
   union all
 
   -- 6. Y con sus datos. Si estos números son los de siempre, no se tocó nada.
   select 6,
          'Datos de Finanzas',
-         '📊 ' ||
-         (select count(*) from grupos)::text   || ' grupos · ' ||
-         (select count(*) from gastos)::text   || ' gastos · ' ||
-         (select count(*) from ingresos)::text || ' ingresos · ' ||
-         (select count(*) from tarjetas)::text || ' tarjetas'
+         '📊 ' || string_agg(coalesce(n::text, '—') || ' ' || t, ' · '
+                             order by array_position(
+                               array['grupos', 'gastos', 'ingresos', 'tarjetas'], t))
+  from finanzas
 
 ) x order by orden;

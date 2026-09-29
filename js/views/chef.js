@@ -12,6 +12,7 @@
 // ============================================================================
 import * as db from '../lib/db.js';
 import * as est from '../estado.js';
+import { icono } from '../lib/iconos.js';
 import { temporadaDe } from '../data/temporada.js';
 import { RUBROS } from '../data/recetas.js';
 import {
@@ -175,7 +176,7 @@ export function abrirArmarMenu() {
   ]);
 
   form.append(el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
@@ -260,12 +261,7 @@ function mostrarPropuesta(r) {
             c.ingredientes?.length ? `${c.ingredientes.length} ingredientes` : null,
           ].filter(Boolean).join(' · '),
         }),
-        c.nota
-          ? el('span.meta', {
-            estilo: { color: 'var(--calido)' },
-            texto: `💡 ${c.nota}`,
-          })
-          : null,
+        c.nota ? el('span.meta', { texto: c.nota }) : null,
       ]),
     ]);
     lista.append(fila);
@@ -306,7 +302,7 @@ function mostrarPropuesta(r) {
       await est.recargar('menu');
       cerrarHoja();
       avisoBien(`${filas.length} ${filas.length === 1 ? 'comida cargada' : 'comidas cargadas'}`);
-      est.irA('menu', { semanaVisible: r.menu[0]?.fecha ?? hoy() });
+      est.irA('comidas', { semanaVisible: r.menu[0]?.fecha ?? hoy(), tabComidas: 'menu' });
     } catch (e) {
       avisoMal(db.mensajeDeError(e));
       btn.disabled = false;
@@ -320,7 +316,7 @@ function mostrarPropuesta(r) {
     contenido: [
       lista,
       el('div.acciones', {}, [
-        el('button.btn.fantasma', {
+        el('button.btn.linea', {
           type: 'button',
           texto: 'Descartar',
           'on:click': () => cerrarHoja(),
@@ -414,7 +410,7 @@ export function abrirPreferencias() {
   ]);
 
   form.append(el('div.acciones', {}, [
-    el('button.btn.fantasma', {
+    el('button.btn.linea', {
       type: 'button',
       texto: 'Cancelar',
       'on:click': () => cerrarHoja(),
@@ -466,12 +462,12 @@ export function vistaChef(destino) {
   // --- lo de arriba: las dos acciones grandes ---
   const cabecera = el('section.seccion', {}, [
     el('div.tarjeta', {}, [
-      el('p', {
-        estilo: { fontWeight: '800', fontSize: '1rem' },
-        texto: '👩‍🍳 Armar el menú de la semana',
-      }),
-      el('p', {
-        estilo: { fontSize: '0.83rem', color: 'var(--suave)', margin: '5px 0 13px' },
+      el('p.t3', {}, [
+        icono('chispas', { tamano: 18 }),
+        ' Armar el menú de la semana',
+      ]),
+      el('p.cuerpo-chico', {
+        estilo: { margin: '5px 0 13px' },
         texto: `Lo de temporada en Buenos Aires, lo que comieron hace poco y ` +
           `la agenda de ${rangoSemanaHumano(refSemana)}.`,
       }),
@@ -481,12 +477,11 @@ export function vistaChef(destino) {
         'on:click': abrirArmarMenu,
       }),
     ]),
-    el('button.btn.fantasma.ancho.chico', {
+    el('button.btn.linea.ancho.chico', {
       type: 'button',
-      texto: '⚙️  Cómo comen en casa',
       estilo: { marginTop: '8px' },
       'on:click': abrirPreferencias,
-    }),
+    }, [icono('ajustes', { tamano: 15 }), 'Cómo comen en casa']),
   ]);
 
   // --- el chat ---
@@ -555,9 +550,8 @@ export function vistaChef(destino) {
   const btnEnviar = el('button', {
     type: 'button',
     'aria-label': 'Enviar',
-    texto: '↑',
     'on:click': () => enviar(caja.value),
-  });
+  }, [icono('enviar', { tamano: 18 })]);
 
   const entradaChat = el('div.chat-entrada', {}, [caja, btnEnviar]);
 
@@ -615,7 +609,7 @@ export function vistaChef(destino) {
   }
 
   const btnLimpiar = (mensajes?.length ?? 0) > 0
-    ? el('button.btn.fantasma.ancho.chico', {
+    ? el('button.btn.linea.ancho.chico', {
       type: 'button',
       texto: 'Borrar la conversación',
       estilo: { marginTop: '14px' },

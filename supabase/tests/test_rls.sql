@@ -50,6 +50,7 @@ declare
   v_n        int;
   v_evento   uuid;
   v_persona  uuid;
+  v_tarea    uuid;
   v_err      text;
 begin
   -- Ana crea el hogar
@@ -217,6 +218,59 @@ begin
   perform ag_test_assert((select count(*) from ag_ocurrencias) = 0,
     'las ocurrencias heredan el permiso de su evento');
   reset role;
+
+  raise notice '';
+  raise notice '== Tareas de la casa ======================================================';
+
+  perform ag_test_como(ana);
+  set local role authenticated;
+  insert into ag_tareas (hogar_id, titulo, vence, repite)
+  values (v_hogar.id, 'Pagar el gas', current_date, 'mensual')
+  returning id into v_tarea;
+  perform ag_test_assert(v_tarea is not null, 'Ana puede anotar una tarea');
+  reset role;
+
+  -- Beto es de la casa: la ve y la puede tildar.
+  perform ag_test_como(beto);
+  set local role authenticated;
+  perform ag_test_assert((select count(*) from ag_tareas) = 1,
+    'Beto ve las tareas del hogar');
+  update ag_tareas set hecha = true, hecha_en = now() where id = v_tarea;
+  perform ag_test_assert((select hecha from ag_tareas where id = v_tarea),
+    'cualquiera de la casa puede tildar una tarea');
+  reset role;
+
+  -- Caro no.
+  perform ag_test_como(caro);
+  set local role authenticated;
+  perform ag_test_assert((select count(*) from ag_tareas) = 0,
+    'una extraña no ve las tareas de otro hogar');
+  -- El update no da error: RLS no le deja ver la fila, así que no toca ninguna.
+  -- Por eso se verifica afuera del rol, que es donde se ve la tabla entera.
+  update ag_tareas set titulo = 'Cambiada' where id = v_tarea;
+  begin
+    insert into ag_tareas (hogar_id, titulo) values (v_hogar.id, 'Colada');
+    perform ag_test_assert(false, 'no se deberia poder meter una tarea en un hogar ajeno');
+  exception when insufficient_privilege then
+    perform ag_test_assert(true, 'no se puede meter una tarea en un hogar ajeno');
+  end;
+  reset role;
+  perform ag_test_assert((select titulo from ag_tareas where id = v_tarea) = 'Pagar el gas',
+    'una extraña tampoco las puede cambiar');
+  perform ag_test_assert((select count(*) from ag_tareas) = 1,
+    'y no quedó ninguna tarea colada');
+
+  -- updated_at lo pone el trigger, no el cliente. Se atrasa a mano primero:
+  -- dentro de una transacción now() no se mueve, así que comparar contra
+  -- created_at daría siempre igual y la prueba no probaría nada.
+  update ag_tareas set updated_at = now() - interval '1 day' where id = v_tarea;
+  perform ag_test_como(ana);
+  set local role authenticated;
+  update ag_tareas set titulo = 'Pagar el gas y la luz' where id = v_tarea;
+  reset role;
+  perform ag_test_assert(
+    (select updated_at from ag_tareas where id = v_tarea) > now() - interval '1 minute',
+    'el trigger actualiza updated_at al editar');
 
   raise notice '';
   raise notice '== Menu -> lista de compras ===============================================';

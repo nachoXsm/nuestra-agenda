@@ -7,12 +7,11 @@
 //    3. ¿Esta cuenta pertenece a algún hogar?
 // ============================================================================
 import * as db from '../lib/db.js';
+import { TINTES } from '../data/paleta.js';
+import { trebol } from '../lib/iconos.js';
 import { aviso, avisoBien, campo, el, entrada, pintar } from '../lib/ui.js';
 
-const COLORES = [
-  '#8b7cff', '#ff9f68', '#ff6b9d', '#5bc8ff',
-  '#3ddc97', '#ffd166', '#ff6b6b', '#c3a3ff',
-];
+const COLORES = TINTES;
 
 const EMOJIS = ['🙂', '😎', '🌻', '🧉', '🐧', '🦊', '🧒', '👶', '🐱', '🐶', '⚽', '🎸'];
 
@@ -23,15 +22,9 @@ function elegirAvatar(inicial = {}) {
     emoji: inicial.emoji ?? EMOJIS[0],
   };
 
-  const muestra = el('div.avatar', {
+  const muestra = el('span.avatar.grande', {
     texto: valor.emoji,
-    estilo: {
-      background: valor.color + '28',
-      borderColor: valor.color,
-      width: '52px',
-      height: '52px',
-      fontSize: '1.5rem',
-    },
+    estilo: { '--tinte': valor.color },
   });
 
   const filaColores = el('div.chips', {},
@@ -56,8 +49,7 @@ function elegirAvatar(inicial = {}) {
           }
           e.currentTarget.style.border = '3px solid var(--texto)';
           e.currentTarget.setAttribute('aria-pressed', 'true');
-          muestra.style.background = c + '28';
-          muestra.style.borderColor = c;
+          muestra.style.setProperty('--tinte', c);
         },
       })
     ));
@@ -119,10 +111,15 @@ function alEnviar(form, boton, cajaError, accion) {
   });
 }
 
-function marca(titulo, bajada) {
-  return el('div.marca', {}, [
-    el('span.logo', { 'aria-hidden': 'true', texto: '🗓️' }),
-    el('h1', { texto: titulo }),
+/**
+ * El trébol, el nombre y una línea. El nombre va siempre en minúscula: es
+ * parte de la marca, no un descuido.
+ */
+function cabeceraMarca(titulo, bajada) {
+  return el('div.marca-grande', {}, [
+    trebol({ tamano: 56 }),
+    el('p.nombre', { texto: 'juntos' }),
+    el('h1.solo-lectores', { texto: titulo }),
     el('p', { texto: bajada }),
   ]);
 }
@@ -165,7 +162,7 @@ export function pantallaConfig(destino, alListo) {
   });
 
   pintar(destino, el('div.entrada', {}, [
-    marca('Nuestra Agenda', 'Falta conectar la app con tu proyecto de Supabase.'),
+    cabeceraMarca('juntos', 'Falta conectar la app con tu proyecto de Supabase.'),
     form,
     el('p.cambiar', {}, [
       'Si escribís estos datos en ',
@@ -285,11 +282,11 @@ export function pantallaCuenta(destino, alEntrar) {
     }
 
     pintar(destino, el('div.entrada', {}, [
-      marca(
-        'Nuestra Agenda',
+      cabeceraMarca(
+        'juntos',
         esRecuperar
           ? 'Poné tu mail y te mandamos un link para cambiar la contraseña.'
-          : 'La agenda de la familia y el menú de la semana, en un solo lugar.',
+          : 'La agenda de la familia, el menú de la semana y lo que hay que hacer, en un solo lugar.',
       ),
       form,
       cambiar,
@@ -314,11 +311,11 @@ export function pantallaHogar(destino, alListo) {
 
   function pintarElegir() {
     pintar(destino, el('div.entrada', {}, [
-      marca('Ya casi', 'Un hogar es el espacio compartido: la agenda, el menú y la lista de compras viven ahí.'),
+      cabeceraMarca('Ya casi', 'Un hogar es el espacio compartido: la agenda, el menú y la lista de compras viven ahí.'),
       el('div.tarjeta', {}, [
         el('button.btn.primario.ancho', {
           type: 'button',
-          texto: '🏠  Crear nuestro hogar',
+          texto: 'Crear nuestro hogar',
           'on:click': () => {
             modo = 'crear';
             pintarPantalla();
@@ -328,9 +325,9 @@ export function pantallaHogar(destino, alListo) {
           estilo: { marginTop: '8px', marginBottom: '18px' },
           texto: 'Elegí esto si sos el primero. Después compartís un código de 6 letras.',
         }),
-        el('button.btn.ancho', {
+        el('button.btn.suave.ancho', {
           type: 'button',
-          texto: '🔑  Tengo un código',
+          texto: 'Tengo un código',
           'on:click': () => {
             modo = 'unirse';
             pintarPantalla();
@@ -393,7 +390,7 @@ export function pantallaHogar(destino, alListo) {
     });
 
     pintar(destino, el('div.entrada', {}, [
-      marca('Tu hogar', 'Dos datos y listo.'),
+      cabeceraMarca('Tu hogar', 'Dos datos y listo.'),
       form,
       volver(),
     ]));
@@ -457,7 +454,7 @@ export function pantallaHogar(destino, alListo) {
     });
 
     pintar(destino, el('div.entrada', {}, [
-      marca('Entrar a un hogar', 'Pedile el código a quien ya está adentro.'),
+      cabeceraMarca('Entrar a un hogar', 'Pedile el código a quien ya está adentro.'),
       form,
       volver(),
     ]));
@@ -509,7 +506,7 @@ export function pantallaNuevaPassword(destino, alListo) {
   });
 
   pintar(destino, el('div.entrada', {}, [
-    marca('Contraseña nueva', 'Elegí una nueva y entrás derecho.'),
+    cabeceraMarca('Contraseña nueva', 'Elegí una nueva y entrás derecho.'),
     form,
   ]));
 }

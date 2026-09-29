@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- La versión "maskable": Android le recorta los bordes con la forma que
+       tenga el launcher (círculo, squircle, gota). El trébol va más chico para
+       que entre entero en la zona segura, que es el 80% del centro. -->
+  <rect width="512" height="512" fill="#1F4D43"/>
+  <g transform="translate(256 250) scale(1.95) translate(-60 -60)">
+    <path d="M60 60 C76 74 86 90 91 114"
+          fill="none" stroke="#C4674A" stroke-width="7" stroke-linecap="round"/>
+    <g fill="#F7F3EC">
+      <circle cx="42" cy="42" r="25.46"/>
+      <circle cx="78" cy="42" r="25.46"/>
+      <circle cx="42" cy="78" r="25.46"/>
+      <circle cx="78" cy="78" r="25.46"/>
+    </g>
+  </g>
+</svg>

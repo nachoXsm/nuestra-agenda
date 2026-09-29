@@ -1,6 +1,13 @@
-# Nuestra Agenda
+<p align="center">
+  <img src="icons/trebol.svg" width="72" alt="">
+</p>
 
-La agenda de la familia y el menú de la semana, en un solo lugar.
+<h1 align="center">juntos</h1>
+
+<p align="center">
+La agenda de la familia, el menú de la semana y lo que hay que hacer, en un solo
+lugar.
+</p>
 
 Hecha para dos personas que comparten una casa y un hijo, y que se olvidan las
 cosas. Corre en el celular como app (PWA), se sirve gratis desde GitHub Pages y
@@ -8,23 +15,44 @@ guarda todo en Supabase. No usa Vercel ni ningún otro servicio.
 
 **→ [nachoxsm.github.io/nuestra-agenda](https://nachoxsm.github.io/nuestra-agenda/)**
 
-Todavía falta conectarla con Supabase: los pasos están en [SETUP.md](SETUP.md).
+La app se llama *juntos*; el repositorio y la dirección siguen diciendo
+`nuestra-agenda` porque renombrarlos cambiaría el link que ya está guardado en
+los teléfonos.
 
 <p align="center">
-  <img src="docs/capturas/oscuro-hoy.png" width="24%" alt="Pantalla Hoy">
-  <img src="docs/capturas/oscuro-agenda.png" width="24%" alt="Agenda del mes">
-  <img src="docs/capturas/oscuro-menu.png" width="24%" alt="Menú de la semana">
-  <img src="docs/capturas/oscuro-chef.png" width="24%" alt="El agente de comidas">
+  <img src="docs/capturas/claro-inicio.png" width="24%" alt="Inicio">
+  <img src="docs/capturas/claro-agenda.png" width="24%" alt="Agenda del mes">
+  <img src="docs/capturas/claro-agenda-semana.png" width="24%" alt="Agenda de la semana">
+  <img src="docs/capturas/claro-tareas.png" width="24%" alt="Tareas de la casa">
 </p>
 
 ---
 
 ## Qué hace
 
-**Agenda compartida.** Los eventos se cargan una vez y los ven los dos, al
-instante. Cada uno tiene su color; los chicos también, aunque no tengan cuenta.
-Se pueden repetir (todos los días, semanal por días elegidos, cada 15, mensual,
-anual) y una vez puntual se puede cancelar sin romper la serie.
+**Agenda compartida, en tres alturas.** Los eventos se cargan una vez y los ven
+los dos, al instante. Cada uno tiene su color; los chicos también, aunque no
+tengan cuenta. Se pueden repetir (todos los días, semanal por días elegidos,
+cada 15, mensual, anual) y una vez puntual se puede cancelar sin romper la
+serie.
+
+Se mira de tres formas, con el control de arriba:
+
+- **Mes** — el calendario completo, y en cada día los eventos **escritos**, con
+  el color de quien los tiene. No hay que tocar un día para enterarse de que el
+  martes hay natación.
+- **Semana** — los siete días abiertos, uno abajo del otro, con todo lo que
+  tiene cada uno y qué se come ese día.
+- **Día** — un día entero con las horas a la izquierda, más las comidas y las
+  tareas que vencen.
+
+Y arriba de todo, un filtro por integrante: con tres personas cargadas el mes se
+llena, y poder ver solo lo del nene es media agenda.
+
+**Tareas de la casa.** Lo que hay que hacer pero no tiene hora: pagar el gas,
+comprar el regalo, sacar la ropa de invierno. Se reparten entre los integrantes,
+se tildan, y las que se repiten dejan sola la de la próxima vuelta. Arriba, cómo
+viene la semana: el porcentaje hecho y una barrita por persona.
 
 **El celular avisa solo.** Esta es la parte que resuelve el "me olvido". La app
 publica la agenda como un calendario `.ics` suscribible; se agrega una vez al
@@ -36,7 +64,8 @@ push, ni claves VAPID, ni un servidor escuchando.
 recetario de comida de casa argentina. Cada comida guarda sus ingredientes.
 
 **Lista de compras.** Sale de los ingredientes del menú con un toque, junta lo
-repetido y queda agrupada por comercio: verdulería, carnicería, almacén.
+repetido y queda agrupada por comercio: verdulería, carnicería, almacén. Cada
+cosa dice de qué plato salió, así se puede decidir si hace falta de verdad.
 
 **Un agente que sabe de temporada.** Propone el menú de la semana completo, o
 contesta preguntas sueltas. Lo que lo hace distinto de preguntarle a un chatbot
@@ -93,11 +122,20 @@ js/
     fechas.js               fechas y repeticiones, en hora de Buenos Aires
     ics.js                  leer y escribir calendarios .ics
     ui.js                   armar nodos, avisos, hojas emergentes
+    iconos.js               los iconos, dibujados a mano en SVG
   data/
     temporada.js            qué hay de temporada mes a mes en Buenos Aires
     recetas.js              el recetario base
     categorias.js           las categorías de evento
-  views/                    una pantalla por archivo
+    paleta.js               los colores de los integrantes
+  views/
+    inicio.js               cómo viene el día
+    agenda.js               mes, semana, día y el editor de eventos
+    comidas.js              menú de la semana y lista de compras
+    tareas.js               las tareas de la casa
+    familia.js              integrantes, avisos y ajustes
+    chef.js                 el agente
+    entrar.js               configuración, cuenta y hogar
 supabase/
   schema.sql                tablas, RLS y funciones
   functions/
@@ -107,6 +145,21 @@ supabase/
   tests/                    pruebas del esquema sobre un Postgres real
 pruebas/                    pruebas de la interfaz en un navegador real
 ```
+
+### La identidad
+
+El sistema visual sale del manual de *juntos*: superficies planas sobre marfil,
+bordes de 1 px en lugar de sombras, radios generosos y áreas táctiles de 44 px
+como mínimo. El terracota se usa solo para lo de hoy y lo urgente; si estuviera
+en todos lados, dejaría de avisar nada.
+
+El símbolo son cuatro hojas iguales que se tocan en el centro —todos tienen su
+lugar y todos se tocan— y un tallo terracota que las sostiene: el tiempo
+compartido. Está en `icons/trebol.svg`, con las cuentas del radio anotadas.
+
+Los iconos están dibujados a mano en `js/lib/iconos.js` y no son emoji: el emoji
+lo dibuja el sistema, así que en un Android se ve de una forma, en un iPhone de
+otra, y ninguna de las dos se parece al resto de la app.
 
 ### Decisiones que vale la pena conocer
 
@@ -131,6 +184,11 @@ el 29 de febrero, unos lo saltean y otros lo corren al 1 de marzo.
 `js/data/temporada.js` y viaja como contexto en cada pedido al agente. La función
 no tiene su propia copia, justamente para que no se desincronicen.
 
+**El color de cada integrante se guarda una sola vez.** En la base va el tinte y
+nada más; el fondo suave y el color de texto los calcula el CSS con `color-mix`
+a partir de ese tinte. Si se guardaran los dos, el mismo verde pastel que se lee
+sobre marfil quedaría ilegible en el tema oscuro.
+
 **Nada de la base se convierte en HTML.** Todo lo que escribió una persona entra
 por `textContent`. Lo que devuelve el modelo se escapa primero y recién después
 se le agrega el negrita. Hay dos pruebas que lo verifican.
@@ -143,15 +201,18 @@ Tres capas, todas corren sin servicios de afuera: ni Supabase, ni claves de API,
 ni red. También corren solas en cada push (`.github/workflows/pruebas.yml`).
 
 ```bash
-# 60 asserts: el esquema, el RLS y la convivencia con otra app en el mismo
-# proyecto, todo contra un Postgres de verdad
+# el esquema, el RLS y la convivencia con otra app en el mismo proyecto,
+# todo contra un Postgres de verdad
 ./supabase/tests/run.sh
 
 # 179 pruebas: las funciones y las librerías del frontend
 deno task test
 
-# 24 pruebas: la interfaz entera, en un Chromium de verdad
+# 31 pruebas: la interfaz entera, en un Chromium de verdad
 node pruebas/app.test.mjs
+
+# y, de paso, las capturas de este README
+node pruebas/capturas.mjs
 ```
 
 Lo que cubren:
@@ -187,6 +248,6 @@ Lo que cubren:
 
 <p align="center">
   <img src="docs/capturas/claro-compras.png" width="32%" alt="Lista de compras por comercio">
-  <img src="docs/capturas/claro-menu.png" width="32%" alt="Menú, tema claro">
-  <img src="docs/capturas/oscuro-evento.png" width="32%" alt="Cargar un evento">
+  <img src="docs/capturas/claro-comidas.png" width="32%" alt="Menú de la semana">
+  <img src="docs/capturas/oscuro-inicio.png" width="32%" alt="Inicio, tema oscuro">
 </p>

@@ -426,7 +426,7 @@ export function eventoAIcs(evento, { nombrePersona } = {}) {
   const lineas = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Nuestra Agenda//ES',
+    'PRODID:-//juntos//ES',
     'BEGIN:VEVENT',
     `UID:${evento.id ?? crypto.randomUUID()}@nuestra-agenda`,
     `DTSTAMP:${utc(new Date())}`,

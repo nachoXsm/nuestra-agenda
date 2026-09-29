@@ -17,8 +17,43 @@ para siempre.
 El costo es real: sin tipos, sin tree shaking, sin minificar. A esta escala —
 unos pocos miles de líneas y dos usuarios — no se nota.
 
-Las dos dependencias de afuera son `supabase-js` (CDN) y la tipografía. Las dos
-las cachea el service worker.
+Las dos dependencias de afuera son `supabase-js` (CDN) y las tipografías. Las
+dos las cachea el service worker.
+
+Los iconos no son una dependencia: están dibujados a mano en
+`js/lib/iconos.js`, como listas de paths sobre una grilla de 24. Es más trabajo
+que traer una librería de iconos, pero son unos treinta dibujos que no van a
+cambiar y evitan una descarga más y una versión más que mantener. Tampoco son
+emoji: el emoji lo dibuja el sistema operativo, así que el mismo icono se ve
+distinto en cada teléfono y ninguno se parece al resto de la app.
+
+## El color de cada integrante se guarda una sola vez
+
+En `ag_personas` va el tinte y nada más. El fondo suave de una fila y el color
+del texto que va encima los calcula el CSS con `color-mix` a partir de ese
+tinte, y los calcula distinto según el tema:
+
+```css
+[style*='--tinte'] {
+  --tinte-fondo: color-mix(in srgb, var(--tinte) 13%, var(--superficie));
+  --tinte-texto: var(--tinte);
+}
+:root[data-tema='oscuro'] [style*='--tinte'] {
+  --tinte-fondo: color-mix(in srgb, var(--tinte) 24%, var(--superficie));
+  --tinte-texto: color-mix(in srgb, var(--tinte) 45%, #ffffff);
+}
+```
+
+Si el fondo y el texto se guardaran en la base junto al tinte, habría que elegir
+para qué tema: el mismo verde pastel que se lee sobre marfil es ilegible sobre
+negro. Guardando uno solo, el mismo dato sirve para los dos, y cambiar la paleta
+es cambiar una lista en `js/data/paleta.js`.
+
+**Ojo con una trampa de JavaScript:** una variable CSS no se puede asignar con
+`Object.assign(nodo.style, { '--tinte': color })`. No falla, no avisa: la
+ignora. Hay que usar `setProperty`, y por eso `el()` en `js/lib/ui.js` trata
+aparte las claves que empiezan con `--`. Esto ya se rompió una vez y el síntoma
+fue que todos los integrantes se veían del mismo gris.
 
 ## Las horas viven en Buenos Aires
 
@@ -94,9 +129,10 @@ instante.
 
 **RLS de verdad, no por convención.** Cada tabla tiene una política que exige
 ser miembro del hogar. Las funciones de membresía son `security definer` para no
-entrar en recursión al consultarse a sí mismas. Hay 45 asserts en
-`supabase/tests/test_rls.sql` que corren sobre un Postgres real y verifican, uno
-por uno, que alguien de afuera no vea ni escriba nada.
+entrar en recursión al consultarse a sí mismas. `supabase/tests/test_rls.sql`
+corre sobre un Postgres real y verifica, tabla por tabla, que alguien de afuera
+no vea ni escriba nada. Cada tabla nueva suma su propio bloque ahí: una tabla
+sin prueba de RLS es una tabla que nadie verificó.
 
 **El alta de hogar va por una función, no por un insert.** Si `ag_hogares`
 aceptara inserts sueltos, se podría crear un hogar sin personas: un hogar

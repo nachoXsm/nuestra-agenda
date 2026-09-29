@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="juntos">
+  <!-- ======================================================================
+       El trébol de juntos.
+
+       Cuatro hojas iguales que se tocan en el centro —todos tienen su lugar y
+       todos se tocan— y un tallo terracota que las sostiene: el tiempo
+       compartido. El tallo es el único acento de color.
+
+       Las hojas son círculos, no elipses: con elipses las puntas se juntan en
+       el centro y el conjunto se lee como una X, no como un trébol.
+
+       El radio no es libre. Con los centros a 18 del medio, las hojas en
+       diagonal se tocan justo en r = 18·√2 = 25.46. Con menos queda un rombo
+       blanco en el centro (las hojas no se tocan, que es lo contrario de lo
+       que dice la marca); con bastante más las cuatro se funden en un cuadrado
+       redondeado y se pierden los lóbulos.
+       ====================================================================== -->
+
+  <!-- El tallo va primero para que quede DETRÁS de las hojas: si se dibuja
+       después, el trazo cruza la hoja de abajo a la derecha y parte el trébol
+       en dos. Así solo asoma por abajo, que es el gesto. -->
+  <path d="M60 60 C76 74 86 90 91 114"
+        fill="none"
+        stroke="var(--acento, #C4674A)"
+        stroke-width="7"
+        stroke-linecap="round"/>
+
+  <g fill="currentColor">
+    <circle cx="42" cy="42" r="25.46"/>
+    <circle cx="78" cy="42" r="25.46"/>
+    <circle cx="42" cy="78" r="25.46"/>
+    <circle cx="78" cy="78" r="25.46"/>
+  </g>
+</svg>
