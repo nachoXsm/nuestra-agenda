@@ -230,11 +230,16 @@ Queda como una app más, con su ícono y sin la barra del navegador.
 **"No se pudieron traer los datos"** — falta correr el `schema.sql` del paso 2,
 o la URL o la clave están mal en `config.js`.
 
-**La sección Tareas da error** — es la tabla `ag_tareas`, que se sumó después.
-Volvé a correr el `schema.sql` entero: es idempotente, así que pasarlo de nuevo
-sobre una base que ya tiene el resto no toca nada de lo que ya está, solo agrega
-lo que falta. Para quedarte tranquilo, después corré `supabase/verificar.sql`:
-tiene que decir "las 11 tablas están" y que Finanzas sigue intacta.
+**Una sección dice "Falta instalar…"** — le falta su tabla a la base. Pasa
+cuando la app se instaló antes de que esa sección existiera: `ag_tareas`, por
+ejemplo, se sumó después. Volvé a correr el `schema.sql` entero: es idempotente,
+así que pasarlo de nuevo sobre una base que ya tiene el resto no toca nada de lo
+que está cargado, solo agrega lo que falta. Después corré
+`supabase/verificar.sql`: tiene que decir "las 11 tablas están" y que Finanzas
+sigue intacta.
+
+El resto de la app sigue funcionando mientras tanto: una tabla que falta se
+lleva puesta su sección y nada más.
 
 **No llega el mail de confirmación** — apagá *Confirm email* (paso 3). El
 servidor de prueba de Supabase casi no manda mails.

@@ -43,6 +43,7 @@ import {
   el,
   elegir,
   entrada,
+  faltaLaTabla,
   hoja,
   marca,
   pintar,
@@ -414,6 +415,16 @@ export function vistaComidas(destino) {
       { etiqueta: 'Qué mirar de comidas' },
     ),
   ]);
+
+  // Si la tabla de la solapa no está en la base, se dice qué falta en vez de
+  // mostrar una sección vacía que parece rota.
+  const tabla = tab === 'compras' ? 'ag_compras' : 'ag_menu';
+  if (est.faltaEnLaBase(tabla)) {
+    pintar(destino, control, el('section.seccion', {}, [
+      faltaLaTabla(tabla, tab === 'compras' ? 'la lista de compras' : 'el menú semanal'),
+    ]));
+    return null;
+  }
 
   const cuerpo = tab === 'compras' ? bloqueCompras() : bloqueMenu();
 

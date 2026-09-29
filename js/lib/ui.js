@@ -224,6 +224,40 @@ export function huesos(cuantos = 3) {
 }
 
 /**
+ * Cuando una sección no tiene su tabla en la base todavía.
+ *
+ * No es un error de la app ni algo que se arregle tocando: falta correr el
+ * schema.sql. Por eso dice exactamente qué hacer, en vez de mostrar una
+ * sección vacía que parece rota.
+ */
+export function faltaLaTabla(tabla, queSeria) {
+  return el('div.tarjeta', {
+    estilo: {
+      background: 'var(--terracota-claro)',
+      borderColor: 'transparent',
+      display: 'flex',
+      gap: 'var(--e3)',
+      alignItems: 'flex-start',
+    },
+  }, [
+    el('span', { estilo: { color: 'var(--terracota-texto)', flex: 'none' } },
+      [icono('alerta', { tamano: 20 })]),
+    el('div', {}, [
+      el('p.t3', {
+        estilo: { color: 'var(--terracota-texto)' },
+        texto: `Falta instalar ${queSeria}`,
+      }),
+      el('p.cuerpo-chico', {
+        estilo: { color: 'var(--terracota-texto)', marginTop: '4px' },
+        texto: `La tabla ${tabla} no está en la base. Abrí Supabase → SQL Editor, ` +
+          'pegá de nuevo todo supabase/schema.sql y dale Run. Se puede correr ' +
+          'las veces que haga falta: no toca nada de lo que ya está cargado.',
+      }),
+    ]),
+  ]);
+}
+
+/**
  * Pantalla vacía. El primer argumento es el nombre de un icono de iconos.js,
  * no un emoji: el emoji lo dibuja cada sistema a su manera y ninguno de ellos
  * se parece al resto de la app.

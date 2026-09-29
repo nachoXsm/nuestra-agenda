@@ -85,6 +85,39 @@ function rangoPorDefecto() {
 }
 
 /**
+ * Una sección cuya tabla puede no estar todavía.
+ *
+ * La app se instala una vez y después se le agregan cosas. Si alguien instaló
+ * antes de que existiera ag_tareas y no volvió a correr el schema.sql, esa
+ * tabla no está en su proyecto. Sin esto, ese único error tumbaba el
+ * Promise.all entero y la app no abría: ni agenda, ni menú, ni nada. Un pedazo
+ * que falta tiene que costar ese pedazo y nada más.
+ *
+ * Solo se traga el error de "esa tabla no existe". Cualquier otro (sin
+ * permiso, sin red, sesión vencida) sigue de largo, porque esos sí tienen que
+ * frenar la carga y mostrarse.
+ */
+async function opcional(promesa, siFalta) {
+  try {
+    return await promesa;
+  } catch (e) {
+    const tabla = db.tablaQueFalta(e);
+    if (!tabla) throw e;
+    faltanEnLaBase.add(tabla);
+    return siFalta;
+  }
+}
+
+// Las tablas que la base todavía no tiene. Las vistas la consultan para decir
+// qué hay que hacer en vez de mostrar una sección vacía sin explicación.
+const faltanEnLaBase = new Set();
+
+/** ¿Falta esta tabla en la base? */
+export function faltaEnLaBase(tabla) {
+  return faltanEnLaBase.has(tabla);
+}
+
+/**
  * Carga todo lo del hogar. Se llama al entrar y cuando hace falta refrescar.
  * El rango es amplio a propósito: una familia carga decenas de eventos, no
  * miles, así que traer un año de una vez sale más barato que ir pidiendo de a
@@ -96,15 +129,18 @@ export async function cargarTodo() {
 
   poner({ cargando: true });
   try {
+    // El hogar, las personas y los eventos son la app: si falta alguna de esas
+    // tablas no hay nada que mostrar y el error tiene que verse. El resto son
+    // secciones, y cada una se puede caer sola.
     const [personas, eventos, menu, compras, tareas, preferencias, calendarios] =
       await Promise.all([
         db.personas(estado.hogar.id),
         db.eventos(estado.hogar.id, rango.desde, rango.hasta),
-        db.menu(estado.hogar.id, sumarDias(rango.desde, 0), rango.hasta),
-        db.compras(estado.hogar.id),
-        db.tareas(estado.hogar.id),
-        db.preferencias(estado.hogar.id),
-        db.calendarios(estado.hogar.id),
+        opcional(db.menu(estado.hogar.id, sumarDias(rango.desde, 0), rango.hasta), []),
+        opcional(db.compras(estado.hogar.id), []),
+        opcional(db.tareas(estado.hogar.id), []),
+        opcional(db.preferencias(estado.hogar.id), null),
+        opcional(db.calendarios(estado.hogar.id), []),
       ]);
 
     const miId = estado.sesion?.user?.id;
@@ -132,16 +168,16 @@ export async function recargar(que) {
 
   const traer = {
     eventos: () => db.eventos(id, rango.desde, rango.hasta).then((v) => ({ eventos: v })),
-    menu: () => db.menu(id, rango.desde, rango.hasta).then((v) => ({ menu: v })),
-    compras: () => db.compras(id).then((v) => ({ compras: v })),
-    tareas: () => db.tareas(id).then((v) => ({ tareas: v })),
+    menu: () => opcional(db.menu(id, rango.desde, rango.hasta), []).then((v) => ({ menu: v })),
+    compras: () => opcional(db.compras(id), []).then((v) => ({ compras: v })),
+    tareas: () => opcional(db.tareas(id), []).then((v) => ({ tareas: v })),
     personas: () =>
       db.personas(id).then((v) => ({
         personas: v,
         yo: v.find((p) => p.user_id === estado.sesion?.user?.id) ?? null,
       })),
-    preferencias: () => db.preferencias(id).then((v) => ({ preferencias: v })),
-    calendarios: () => db.calendarios(id).then((v) => ({ calendarios: v })),
+    preferencias: () => opcional(db.preferencias(id), null).then((v) => ({ preferencias: v })),
+    calendarios: () => opcional(db.calendarios(id), []).then((v) => ({ calendarios: v })),
   };
 
   const cuales = [].concat(que).filter((k) => traer[k]);

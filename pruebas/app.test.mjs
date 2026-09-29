@@ -918,6 +918,56 @@ prueba('el menú que propone el agente se revisa antes de cargarlo', async (nav)
   await contexto.close();
 });
 
+prueba('si falta una tabla, la app abre igual y esa sección dice qué hacer', async (nav) => {
+  // Pasa de verdad: alguien instala la app, más adelante se agrega una tabla, y
+  // hasta que no vuelve a correr el schema.sql esa tabla no está en su
+  // proyecto. Antes ese único error tumbaba la carga entera y la app no abría.
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      tablasQueFaltan: ['ag_tareas'],
+      eventos: [{
+        id: 'e1',
+        hogar_id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+        titulo: 'Clase de natación',
+        categoria: 'hijo',
+        inicio: `${hoyISO()}T19:00:00-03:00`,
+        fin: null,
+        todo_el_dia: false,
+        persona_id: 'p3',
+        repite: 'no',
+        repite_dias: [],
+        repite_hasta: null,
+        updated_at: new Date().toISOString(),
+      }],
+    },
+  });
+  await pagina.waitForTimeout(300);
+
+  // La app abre y el resto anda entero.
+  afirmar(await pagina.isVisible('#barra'), 'la app tiene que abrir igual');
+  afirmar(
+    (await pagina.textContent('#main')).includes('Clase de natación'),
+    'lo que no depende de esa tabla tiene que seguir andando',
+  );
+
+  await irA(pagina, 'agenda');
+  await pagina.waitForTimeout(200);
+  afirmar(
+    (await pagina.textContent('#main')).includes('Clase de natación'),
+    'la agenda también',
+  );
+
+  // Y la sección que no tiene su tabla dice qué hacer, con el nombre exacto.
+  await irA(pagina, 'tareas');
+  await pagina.waitForTimeout(200);
+  const texto = await pagina.textContent('#main');
+  afirmar(texto.includes('ag_tareas'), `tiene que nombrar la tabla: "${texto.slice(0, 120)}"`);
+  afirmar(texto.includes('schema.sql'), 'y decir qué hay que correr');
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
 prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
   // Al instalar, las funciones son un paso aparte y se pueden dejar para
   // después. Todo lo que no depende de ellas —el hogar, la agenda, el menú, la

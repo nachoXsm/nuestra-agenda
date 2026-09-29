@@ -80,6 +80,8 @@ const bd = {
   // Respuestas preparadas para el agente.
   respuestaChat: 'Con el zapallo que está de temporada te sale una crema en 30 minutos.',
   respuestaMenu: null,
+  // Para simular un proyecto al que le falta correr el schema.sql de nuevo.
+  tablasQueFaltan: [],
   // Para verificar qué contexto se le mandó al agente.
   ultimoPedidoChef: null,
   fallarProximo: null,
@@ -101,6 +103,25 @@ function quizasFallar(operacion) {
     bd.fallarProximo = null;
     throw new Error('Falla de prueba en ' + operacion);
   }
+}
+
+/**
+ * Simula una tabla que no está en la base, como cuando alguien instaló la app
+ * antes de que esa tabla existiera y no volvió a correr el schema.sql. El
+ * error tiene la misma forma que el de PostgREST, incluida la marca que deja
+ * ok() en db.js.
+ */
+function quizasFaltaLaTabla(tabla) {
+  if (!(bd.tablasQueFaltan ?? []).includes(tabla)) return;
+  const e = new Error(
+    `Falta la tabla ${tabla} en la base. Hay que volver a correr supabase/schema.sql.`,
+  );
+  e.tablaQueFalta = tabla;
+  throw e;
+}
+
+export function tablaQueFalta(e) {
+  return e?.tablaQueFalta ?? null;
 }
 
 // --- configuración ----------------------------------------------------------
@@ -287,6 +308,7 @@ export async function desmarcarOcurrencia(eventoId, fecha) {
 // --- menú -------------------------------------------------------------------
 
 export async function menu() {
+  quizasFaltaLaTabla('ag_menu');
   return demora([...bd.menu]);
 }
 
@@ -317,6 +339,7 @@ export async function borrarComida(id) {
 // --- compras ----------------------------------------------------------------
 
 export async function compras() {
+  quizasFaltaLaTabla('ag_compras');
   return demora([...bd.compras]);
 }
 export async function agregarCompra(item) {
@@ -379,6 +402,7 @@ export async function menuALaLista(hogarId, desde, hasta) {
 // --- preferencias -----------------------------------------------------------
 
 export async function preferencias() {
+  quizasFaltaLaTabla('ag_preferencias');
   return demora({ ...bd.preferencias });
 }
 export async function guardarPreferencias(hogarId, cambios) {
@@ -389,6 +413,7 @@ export async function guardarPreferencias(hogarId, cambios) {
 // --- tareas -----------------------------------------------------------------
 
 export async function tareas() {
+  quizasFaltaLaTabla('ag_tareas');
   // Mismo orden que la consulta real: pendientes primero, después por
   // vencimiento, y las que no tienen fecha al final.
   const orden = [...bd.tareas].sort((a, b) => {
@@ -446,6 +471,7 @@ export async function borrarTareasHechas() {
 // --- calendarios ------------------------------------------------------------
 
 export async function calendarios() {
+  quizasFaltaLaTabla('ag_calendarios');
   return demora([...bd.calendarios]);
 }
 export async function guardarCalendario(cal) {

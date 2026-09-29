@@ -89,8 +89,41 @@ const MENSAJES = [
   [/jwt expired|invalid token/i, 'Se venció la sesión. Volvé a entrar.'],
   [/failed to fetch|networkerror|load failed/i,
     'No hay conexión con el servidor. Revisá internet.'],
+  [/could not find the table '(?:public\.)?([a-z_]+)'/i,
+    'Falta la tabla $1 en la base. Hay que volver a correr supabase/schema.sql.'],
+  [/relation "(?:public\.)?([a-z_]+)" does not exist/i,
+    'Falta la tabla $1 en la base. Hay que volver a correr supabase/schema.sql.'],
   [/SIN_CONFIG/, 'Falta configurar la conexión con Supabase'],
 ];
+
+// Una tabla que todavía no está. Pasa de verdad: alguien instala la app, más
+// adelante se agrega una tabla nueva, y hasta que no vuelve a correr el
+// schema.sql esa tabla no existe en su proyecto. PostgREST lo dice con
+// PGRST205 y Postgres directo con 42P01.
+const FALTA_TABLA = [
+  /could not find the table '(?:public\.)?([a-z_]+)'/i,
+  /relation "(?:public\.)?([a-z_]+)" does not exist/i,
+];
+
+function detectarTablaQueFalta(error) {
+  const texto = typeof error === 'string'
+    ? error
+    : `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`;
+  for (const patron of FALTA_TABLA) {
+    const m = texto.match(patron);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Si el error es "esa tabla no existe", devuelve el nombre de la tabla; si no,
+ * null. Sirve para que una sección que todavía no está instalada no se lleve
+ * puesta la app entera.
+ */
+export function tablaQueFalta(e) {
+  return e?.tablaQueFalta ?? detectarTablaQueFalta(e);
+}
 
 export function mensajeDeError(e) {
   const texto = typeof e === 'string' ? e : (e?.message ?? e?.error_description ?? '');
@@ -104,7 +137,14 @@ export function mensajeDeError(e) {
 // Envuelve una respuesta de supabase-js: o devuelve los datos, o tira un error
 // ya traducido. Así las vistas no repiten el chequeo de `error` en cada llamada.
 function ok({ data, error }) {
-  if (error) throw new Error(mensajeDeError(error));
+  if (error) {
+    const err = new Error(mensajeDeError(error));
+    // El mensaje ya sale traducido y ahí se pierde el nombre de la tabla, así
+    // que se guarda aparte antes de perderlo.
+    const falta = detectarTablaQueFalta(error);
+    if (falta) err.tablaQueFalta = falta;
+    throw err;
+  }
   return data;
 }
 

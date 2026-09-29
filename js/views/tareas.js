@@ -25,6 +25,7 @@ import {
   el,
   elegir,
   entrada,
+  faltaLaTabla,
   hoja,
   marca,
   pintar,
@@ -281,6 +282,15 @@ export function abrirEditorTarea({ tarea = null, personaSugerida = '' } = {}) {
 // ---------------------------------------------------------------------------
 
 export function vistaTareas(destino) {
+  // Tareas es la sección más nueva: si la app se instaló antes de que
+  // existiera, esa tabla todavía no está en la base de ese proyecto.
+  if (est.faltaEnLaBase('ag_tareas')) {
+    pintar(destino, el('section.seccion', {}, [
+      faltaLaTabla('ag_tareas', 'las tareas de la casa'),
+    ]));
+    return null;
+  }
+
   const p = est.progresoTareas();
   const todas = est.estado.tareas;
   const pendientes = todas.filter((t) => !t.hecha);

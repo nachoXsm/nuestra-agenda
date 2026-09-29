@@ -55,6 +55,23 @@ ignora. Hay que usar `setProperty`, y por eso `el()` en `js/lib/ui.js` trata
 aparte las claves que empiezan con `--`. Esto ya se rompió una vez y el síntoma
 fue que todos los integrantes se veían del mismo gris.
 
+## Una tabla que falta se lleva puesta su sección, no la app
+
+La app se instala una vez y después se le agregan cosas. Cuando se sumó
+`ag_tareas`, cualquiera que no volviera a correr el `schema.sql` tenía esa tabla
+faltando en su proyecto — y el `Promise.all` de `cargarTodo()` convertía ese
+único error en una pantalla de "No se pudieron traer los datos": ni agenda, ni
+menú, ni nada.
+
+Ahora las secciones se cargan con `opcional()`, que se traga **un solo** tipo de
+error: "esa tabla no existe" (PGRST205 de PostgREST, 42P01 de Postgres). La
+sección queda vacía, se anota el nombre de la tabla, y esa pantalla muestra qué
+hay que correr. Cualquier otro error —sin permiso, sin red, sesión vencida—
+sigue de largo y frena la carga, porque esos sí hay que verlos.
+
+Lo que **no** es opcional: el hogar, las personas y los eventos. Sin esas tablas
+no hay app y la pantalla de error es la respuesta correcta.
+
 ## Las horas viven en Buenos Aires
 
 Decisión: los horarios se muestran y se guardan en hora de Buenos Aires,
