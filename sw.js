@@ -8,25 +8,27 @@
 //     quedaría servida para siempre y habría que bumpear la versión a mano cada
 //     vez. Se guarda copia igual, para cuando no hay señal.
 //
-//   - Los iconos y las fuentes van por CACHE PRIMERO: no cambian nunca y son lo
-//     más pesado.
+//   - Los iconos y las fuentes van por CACHE PRIMERO: son lo más pesado y su
+//     nombre cambia cuando cambia el contenido (ver pruebas/iconos-png.mjs),
+//     así que una copia guardada nunca queda vieja.
 //
 //  Lo que NUNCA se cachea son los pedidos a Supabase: la agenda compartida
 //  tiene que estar al día, y una respuesta vieja acá sería peor que un error.
 // ============================================================================
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `nuestra-agenda-${VERSION}`;
 
-// Lo mínimo para que la app abra sin red.
+// Lo mínimo para que la app abra sin red. Los PNG del lanzador NO van acá: el
+// teléfono se queda con su propia copia al instalar la app y adentro nunca se
+// muestran, así que precargarlos era peso al pedo. El trébol sí, que es el que
+// se ve en la cabecera.
 const PRECARGA = [
   './',
   'index.html',
   'css/app.css',
   'js/main.js',
   'icons/trebol.svg',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
   'manifest.webmanifest',
 ];
 

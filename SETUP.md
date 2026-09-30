@@ -252,6 +252,19 @@ secreto hay que volver a desplegar la función para que lo tome.
 navegador: tiene que bajar un archivo que arranca con `BEGIN:VCALENDAR`. Si en
 cambio ves un error de autorización, es eso.
 
+**El ícono del celular quedó con el dibujo viejo** — Android no vuelve a mirar
+el ícono de una app ya instalada: se queda con el que copió el día que la
+agregaste. Sacala de la pantalla de inicio (mantené apretado → Desinstalar; no
+borra nada, es solo el acceso directo), abrí la app en Chrome, y volvé a
+agregarla. Si igual sigue el viejo: Ajustes de Android → Aplicaciones → Chrome →
+Almacenamiento → Borrar caché, y probá de nuevo.
+
+Del lado del repo esto ya está resuelto para la próxima: los PNG del ícono
+llevan la versión en el nombre (`icon-192-v2.png`), así que cuando cambian, el
+manifest cambia con ellos y Chrome lo nota solo. Para cambiar el ícono se sube
+`VERSION` en `pruebas/iconos-png.mjs` y se corre el script: él renombra, borra
+los viejos y deja al día el manifest y el index.
+
 **El calendario tarda en actualizarse** — es así: los calendarios suscritos se
 refrescan cuando el teléfono quiere, y Google puede tardar varias horas. Para
 algo de hoy mismo, usá *Agregar al calendario del celular* desde el evento.
