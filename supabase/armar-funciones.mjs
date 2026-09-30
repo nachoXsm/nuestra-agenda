@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const AQUI = fileURLToPath(new URL('.', import.meta.url));
 const SALIDA = join(AQUI, 'funciones-para-pegar');
-const FUNCIONES = ['chef-ia', 'ics-proxy', 'ics-feed'];
+const FUNCIONES = ['chef-ia', 'ics-proxy', 'ics-feed', 'avisos'];
 
 // Una línea de import de un archivo nuestro. Las de jsr:/npm:/https: no se
 // tocan: esas Deno las resuelve sola y tienen que quedar.

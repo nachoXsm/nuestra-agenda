@@ -51,6 +51,7 @@ declare
   v_evento   uuid;
   v_persona  uuid;
   v_tarea    uuid;
+  v_push     uuid;
   v_err      text;
 begin
   -- Ana crea el hogar
@@ -271,6 +272,76 @@ begin
   perform ag_test_assert(
     (select updated_at from ag_tareas where id = v_tarea) > now() - interval '1 minute',
     'el trigger actualiza updated_at al editar');
+
+  raise notice '';
+  raise notice '== Avisos: dispositivos y claves ==========================================';
+
+  perform ag_test_como(ana);
+  set local role authenticated;
+  insert into ag_push (hogar_id, user_id, endpoint, p256dh, auth)
+  values (v_hogar.id, ana, 'https://push.example/ana', 'clave-ana', 'auth-ana')
+  returning id into v_push;
+  perform ag_test_assert(v_push is not null, 'Ana registra su celular');
+  perform ag_test_assert((select count(*) from ag_push) = 1, 'y lo ve');
+  reset role;
+
+  -- Beto es del hogar, pero el celular de Ana no es asunto suyo: un endpoint de
+  -- push es la direccion a la que le suena el telefono a alguien.
+  perform ag_test_como(beto);
+  set local role authenticated;
+  perform ag_test_assert((select count(*) from ag_push) = 0,
+    'ni el otro del hogar ve los dispositivos ajenos');
+  update ag_push set hora = 3 where id = v_push;
+  delete from ag_push where id = v_push;
+  reset role;
+  perform ag_test_assert(
+    (select count(*) from ag_push where id = v_push and hora = 8) = 1,
+    'ni los puede cambiar ni los puede borrar');
+
+  -- Y no puede registrar uno a nombre de otro.
+  perform ag_test_como(beto);
+  set local role authenticated;
+  begin
+    insert into ag_push (hogar_id, user_id, endpoint, p256dh, auth)
+    values (v_hogar.id, ana, 'https://push.example/trucho', 'x', 'y');
+    perform ag_test_assert(false, 'no se deberia poder registrar a nombre de otro');
+  exception when insufficient_privilege then
+    perform ag_test_assert(true, 'no se puede registrar un aparato a nombre de otro');
+  end;
+  reset role;
+
+  -- Las claves de firma y el token del disparador: cerrados para todos.
+  insert into ag_vapid (id, publica, privada) values (true, 'pub', 'priv')
+    on conflict (id) do nothing;
+
+  perform ag_test_como(ana);
+  set local role authenticated;
+  perform ag_test_assert((select count(*) from ag_vapid) = 0,
+    'las claves VAPID no las lee nadie desde el cliente');
+  perform ag_test_assert((select count(*) from ag_avisos_config) = 0,
+    'el token del disparador tampoco');
+  begin
+    insert into ag_vapid (id, publica, privada) values (false, 'mia', 'mia');
+    perform ag_test_assert(false, 'no se deberian poder escribir claves propias');
+  exception when insufficient_privilege then
+    perform ag_test_assert(true, 'ni se pueden escribir claves propias');
+  end;
+  reset role;
+
+  -- La URL del disparador solo puede apuntar a la funcion de avisos.
+  perform ag_test_como(ana);
+  begin
+    perform ag_registrar_url_avisos('https://malo.example/robar');
+    perform ag_test_assert(false, 'no se deberia poder apuntar el cron a cualquier lado');
+  exception when others then
+    get stacked diagnostics v_err = message_text;
+    perform ag_test_assert(v_err like '%direccion%', 'la URL del disparador se valida');
+  end;
+  perform ag_registrar_url_avisos('https://abcdefgh.supabase.co/functions/v1/avisos');
+  perform ag_test_assert(
+    (select url_funcion from ag_avisos_config) =
+      'https://abcdefgh.supabase.co/functions/v1/avisos',
+    'y una URL valida se guarda');
 
   raise notice '';
   raise notice '== Menu -> lista de compras ===============================================';

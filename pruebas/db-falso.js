@@ -82,11 +82,17 @@ const bd = {
   respuestaMenu: null,
   // Para simular un proyecto al que le falta correr el schema.sql de nuevo.
   tablasQueFaltan: [],
-  // Lo que contesta "Revisar las funciones". Por defecto, las dos arriba.
+  // Lo que contesta "Revisar las funciones". Por defecto, todas arriba.
   estadoFunciones: [
     { nombre: 'chef-ia', estado: 'bien', detalle: 'Responde bien' },
     { nombre: 'ics-proxy', estado: 'bien', detalle: 'Responde bien' },
+    { nombre: 'avisos', estado: 'bien', detalle: 'Responde bien' },
   ],
+  // Avisos: este navegador puede, todavía no pidió permiso, y no hay aparato.
+  puedeAvisar: true,
+  permisoAvisos: 'default',
+  pushAparato: null,
+  pruebasMandadas: 0,
   // Para verificar qué contexto se le mandó al agente.
   ultimoPedidoChef: null,
   fallarProximo: null,
@@ -475,6 +481,60 @@ export async function borrarTarea(id) {
 export async function borrarTareasHechas() {
   await demora();
   bd.tareas = bd.tareas.filter((t) => !t.hecha);
+}
+
+// --- avisos propios (Web Push) ----------------------------------------------
+// El navegador de las pruebas no tiene servicio de push de verdad, así que esto
+// imita lo que la app necesita saber: si hay permiso, si este aparato ya está
+// registrado, y qué pasa al prenderlo.
+
+export function puedeAvisar() {
+  return bd.puedeAvisar !== false;
+}
+
+export function permisoAvisos() {
+  return bd.permisoAvisos ?? 'default';
+}
+
+export async function avisosDeEsteAparato() {
+  await demora();
+  return bd.pushAparato ? { ...bd.pushAparato } : null;
+}
+
+export async function prenderAvisos(hogarId, personaId, { hora = 8 } = {}) {
+  await demora();
+  if (bd.permisoAvisos === 'denied') {
+    throw new Error(
+      'Los avisos están bloqueados para este sitio. Se cambia en los ajustes del navegador.',
+    );
+  }
+  bd.permisoAvisos = 'granted';
+  bd.pushAparato = {
+    id: 'push-1',
+    hogar_id: hogarId,
+    persona_id: personaId,
+    hora,
+    diario: true,
+    semanal: true,
+  };
+  return { ...bd.pushAparato };
+}
+
+export async function apagarAvisos() {
+  await demora();
+  bd.pushAparato = null;
+}
+
+export async function cambiarAvisos(id, cambios) {
+  await demora();
+  bd.pushAparato = { ...bd.pushAparato, ...cambios };
+  return { ...bd.pushAparato };
+}
+
+export async function probarAvisos() {
+  await demora();
+  bd.pruebasMandadas = (bd.pruebasMandadas ?? 0) + 1;
+  return { ok: true, enviados: 1 };
 }
 
 // --- calendarios ------------------------------------------------------------

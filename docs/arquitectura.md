@@ -120,27 +120,77 @@ resuelva igual una fecha que no existe.
 
 **Si tocás una de las dos expansiones, tocá la otra y corré esa prueba.**
 
-## Por qué un feed .ics y no notificaciones push
+## Las notificaciones son propias, y el .ics quedó como extra
 
-El problema que la app tiene que resolver es "me olvido". La respuesta obvia son
-las notificaciones push. Se descartó:
+Durante un tiempo la única forma de que la app avisara fue publicar la agenda
+como calendario y dejar que el recordatorio lo diera el teléfono. Funcionaba,
+pero el aviso era de otra app: su ícono, su formato, y uno por evento.
 
-- Web Push necesita claves VAPID y un servidor que mande las notificaciones en
-  el momento justo. Eso es un servicio corriendo todo el tiempo, que es
-  exactamente lo que no queremos mantener.
-- En iPhone, Web Push solo anda si la PWA está instalada desde Safari, y se
-  rompe con cada cambio de humor de Apple.
-- Una notificación push es una cosa más que mirar. Un evento en el calendario
-  del teléfono se ve junto con todo lo demás, que es donde uno ya mira.
+Ahora los avisos son de juntos. Lo que eso permite, y un calendario no:
 
-El feed `.ics` resuelve lo mismo apoyándose en el calendario del sistema
-operativo, que ya es confiable, ya sabe despertar el teléfono y ya está
-integrado con el reloj y el auto.
+- **Agrupar.** Un aviso por momento en vez de uno por cosa.
+- **Decidir qué es lo importante.** El título lleva lo que roza —una tarea
+  vencida le gana a tres eventos—, no el orden cronológico.
+- **Cruzar datos.** "Hay algo a las 19 y no hay cena pensada" sale de la agenda
+  y del menú a la vez. Ningún calendario puede saber eso.
+- **Callarse.** Si el día no tiene nada, no interrumpe. Un aviso que a veces
+  dice "no hay nada" enseña a ignorarlo.
 
-El costo: los calendarios suscritos se refrescan cuando el cliente quiere
-(Google puede tardar horas). Para algo de hoy mismo está el botón "agregar al
-calendario" de cada evento, que baja un `.ics` de un solo evento y entra al
-instante.
+El texto vive en `_shared/avisos-texto.ts`, aparte de todo lo demás, y es
+función pura: entra el día ya resuelto y sale el aviso. Por eso se puede probar
+el texto como se prueba cualquier función, en vez de mirarlo en un teléfono.
+
+### Web Push escrito a mano
+
+`_shared/webpush.ts` implementa el cifrado (RFC 8291) y la firma VAPID (RFC
+8292) con Web Crypto, sin librerías. Dos razones: las librerías de web push son
+de Node y usan su módulo `crypto`, que en el runtime de Supabase no está
+garantizado; y es una dependencia menos que se puede pudrir en un proyecto que
+tiene que seguir andando en tres años.
+
+El riesgo de escribir criptografía a mano es que un error no se nota: el
+servicio de push acepta el pedido, devuelve 201, y el celular simplemente no
+muestra nada. Por eso la prueba lo corre contra el vector del RFC 8291 §5
+—mismas claves, misma sal— y compara el cuerpo cifrado byte por byte contra lo
+que dice el documento.
+
+### Cómo se dispara sin servidor
+
+`pg_cron` llama a la función cada hora desde adentro del mismo proyecto, con
+`pg_net`. No hay servicio de afuera ni claves pegadas en ningún lado: el cuerpo
+del cron lee la URL y el token de `ag_avisos_config` en cada corrida, y la app
+completa esa URL sola la primera vez que alguien prende los avisos.
+
+Las claves VAPID se generan solas la primera vez y viven en `ag_vapid`, que
+tiene RLS prendida y **ninguna política**. Esa ausencia es la protección: sin
+políticas, el cliente no la lee ni con la clave publishable; solo las funciones,
+que entran con la clave de servicio y saltean RLS.
+
+## Por qué el feed .ics fue primero, y por qué no alcanzó
+
+Al principio los avisos iban solo por el calendario. Las razones para descartar
+push eran tres, y conviene anotar cuáles resultaron ciertas:
+
+- **"Push necesita un servidor corriendo todo el tiempo."** Falso, y era la
+  razón principal. `pg_cron` vive adentro del mismo proyecto de Supabase: no
+  hay un proceso más que mantener ni una cuenta más que pagar.
+- **"En iPhone Web Push solo anda con la PWA instalada."** Cierto, y sigue
+  siéndolo. Por eso la pantalla de avisos detecta cuándo el navegador no puede
+  y lo explica, en vez de mostrar un botón que no va a funcionar.
+- **"Una notificación push es una cosa más que mirar."** Esta era la más
+  discutible, y terminó siendo al revés. El calendario avisa una vez por
+  evento, siempre igual, y avisa aunque no haya nada que decidir: eso sí es una
+  cosa más que mirar. Un aviso por momento, que se calla cuando no hay nada, es
+  menos ruido, no más.
+
+El feed `.ics` quedó igual, pero para otra cosa: ver la agenda mezclada con el
+resto de los compromisos de cada uno. Para eso el calendario del sistema sigue
+siendo mejor que cualquier pantalla que podamos hacer.
+
+Su límite conocido: los calendarios suscritos se refrescan cuando el cliente
+quiere, y Google puede tardar horas. Para algo de hoy mismo está el botón
+"agregar al calendario" de cada evento, que baja un `.ics` de un solo evento y
+entra al instante.
 
 ## Seguridad
 

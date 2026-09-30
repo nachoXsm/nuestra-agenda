@@ -1074,8 +1074,112 @@ prueba('con todo subido, Revisar las funciones no marca nada en rojo', async (na
   igual(enRojo.length, 0, 'con todo bien no tiene que haber nada marcado en rojo');
   igual(
     (await pagina.$$('.hoja .marca.hecha')).length,
-    2,
-    'las dos que se pueden revisar tienen que decir que andan',
+    3,
+    'las tres que se pueden revisar tienen que decir que andan',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('se prenden los avisos de la app y quedan configurables', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Avisos de juntos")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.waitForTimeout(300);
+
+  // Todavía no están: tiene que ofrecer prenderlos.
+  afirmar(
+    (await pagina.textContent('.hoja')).includes('Prender los avisos'),
+    'tendría que ofrecer prenderlos',
+  );
+
+  await pagina.click('.hoja button:has-text("Prender los avisos")');
+  await pagina.waitForTimeout(500);
+
+  const guardado = await bd(pagina, () => globalThis.__falso.pushAparato);
+  afirmar(guardado, 'tenía que quedar registrado el aparato');
+  igual(guardado.hora, 8, 'arranca a las 8');
+  igual(guardado.diario, true, 'con el aviso de cada mañana');
+  igual(guardado.semanal, true, 'y el de los lunes');
+
+  // Ahora muestra los controles.
+  const texto = await pagina.textContent('.hoja');
+  afirmar(texto.includes('Cada mañana'), 'falta el interruptor del diario');
+  afirmar(texto.includes('Los lunes'), 'falta el interruptor del semanal');
+
+  // La hora se puede cambiar y se guarda.
+  await pagina.selectOption('.hoja select', '7');
+  await pagina.waitForTimeout(400);
+  igual(
+    await bd(pagina, () => globalThis.__falso.pushAparato.hora),
+    7,
+    'la hora elegida tiene que guardarse',
+  );
+
+  // Y se puede pedir uno de prueba.
+  await pagina.click('.hoja button:has-text("Mandarme uno de prueba")');
+  await pagina.waitForTimeout(400);
+  igual(
+    await bd(pagina, () => globalThis.__falso.pruebasMandadas),
+    1,
+    'tenía que mandar la prueba',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('si el navegador tiene los avisos bloqueados, lo dice y no miente', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: { permisoAvisos: 'denied' },
+  });
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Avisos de juntos")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.waitForTimeout(300);
+
+  afirmar(
+    (await pagina.textContent('.hoja')).includes('bloqueados'),
+    'tiene que decir que están bloqueados',
+  );
+
+  // Y si igual se toca, el error se ve y no queda registrado nada.
+  await pagina.click('.hoja button:has-text("Prender los avisos")');
+  await pagina.waitForTimeout(400);
+  afirmar(
+    (await pagina.innerText('.hoja .error-campo')).length > 0,
+    'tenía que mostrar el error',
+  );
+  igual(
+    await bd(pagina, () => globalThis.__falso.pushAparato),
+    null,
+    'no se puede registrar un aparato que no dio permiso',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('un navegador que no puede avisar lo explica, no ofrece un botón muerto', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: { puedeAvisar: false },
+  });
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Avisos de juntos")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.waitForTimeout(300);
+
+  const texto = await pagina.textContent('.hoja');
+  afirmar(texto.includes('no puede mostrar avisos'), 'tiene que explicarlo');
+  afirmar(texto.includes('iPhone'), 'y decir qué hacer en iPhone');
+  afirmar(
+    !(await pagina.isVisible('.hoja button:has-text("Prender los avisos")')),
+    'no tiene que haber un botón que no va a andar',
   );
 
   igual(errores, [], 'hubo errores de JavaScript');
@@ -1086,7 +1190,7 @@ prueba('el link del calendario lleva el hogar y el token', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
   await irA(pagina, 'familia');
-  await pagina.click('button:has-text("Suscribir el calendario")');
+  await pagina.click('button:has-text("Ver la agenda en el calendario")');
   await pagina.waitForSelector('.link-feed');
 
   const link = await pagina.innerText('.link-feed');

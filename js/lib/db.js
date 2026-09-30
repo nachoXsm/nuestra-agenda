@@ -508,6 +508,132 @@ export async function bajarIcsRemoto(url) {
 }
 
 // ---------------------------------------------------------------------------
+//  Avisos propios de la app (Web Push)
+// ---------------------------------------------------------------------------
+
+/** El navegador puede, y estamos en un contexto donde tiene sentido pedirlo. */
+export function puedeAvisar() {
+  return typeof Notification !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window;
+}
+
+export const permisoAvisos = () =>
+  typeof Notification === 'undefined' ? 'no-se-puede' : Notification.permission;
+
+async function llamarAvisos(cuerpo) {
+  const s = await sesion();
+  const res = await fetch(urlFuncion('avisos'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${s?.access_token ?? configActual().SUPABASE_ANON_KEY}`,
+      apikey: configActual().SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(cuerpo),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Los avisos respondieron ${res.status}`);
+  return data;
+}
+
+/**
+ * Prende los avisos en ESTE dispositivo.
+ *
+ * Pide permiso, se suscribe al servicio de push del navegador y guarda la
+ * suscripción. La clave pública la trae la función, que la genera sola la
+ * primera vez: no hay ninguna clave que pegar a mano en ningún lado.
+ */
+export async function prenderAvisos(hogarId, personaId, { hora = 8 } = {}) {
+  if (!puedeAvisar()) throw new Error('Este navegador no puede mostrar avisos');
+
+  const permiso = await Notification.requestPermission();
+  if (permiso !== 'granted') {
+    throw new Error(
+      permiso === 'denied'
+        ? 'Los avisos están bloqueados para este sitio. Se cambia en los ajustes del navegador.'
+        : 'Hace falta permitir los avisos',
+    );
+  }
+
+  const reg = await navigator.serviceWorker.ready;
+  const { clave } = await llamarAvisos({ modo: 'clave' });
+  if (!clave) throw new Error('No se pudo preparar la clave de los avisos');
+
+  // El navegador quiere la clave como bytes, no como texto.
+  const bytes = Uint8Array.from(
+    atob(clave.replace(/-/g, '+').replace(/_/g, '/')),
+    (c) => c.charCodeAt(0),
+  );
+
+  const sus = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: bytes,
+  });
+  const j = sus.toJSON();
+
+  const fila = {
+    hogar_id: hogarId,
+    user_id: (await usuario())?.id,
+    persona_id: personaId || null,
+    endpoint: j.endpoint,
+    p256dh: j.keys.p256dh,
+    auth: j.keys.auth,
+    hora,
+  };
+  // El endpoint es único: si este navegador ya estaba, se actualiza.
+  const guardado = ok(
+    await sb().from('ag_push').upsert(fila, { onConflict: 'endpoint' }).select().single(),
+  );
+
+  // Que el disparador horario sepa a qué dirección pegar. Es idempotente y la
+  // función SQL solo acepta la URL de esta misma función.
+  await sb().rpc('ag_registrar_url_avisos', { p_url: urlFuncion('avisos') })
+    .then(({ error }) => {
+      // Que falle esto no tiene que romper el alta: los avisos se pueden
+      // disparar igual desde la app.
+      if (error) console.warn('No se pudo registrar la URL de avisos', error.message);
+    });
+
+  return guardado;
+}
+
+/** Apaga los avisos en este dispositivo. */
+export async function apagarAvisos() {
+  const reg = await navigator.serviceWorker.ready;
+  const sus = await reg.pushManager.getSubscription();
+  if (!sus) return;
+  const endpoint = sus.endpoint;
+  await sus.unsubscribe().catch(() => {});
+  await sb().from('ag_push').delete().eq('endpoint', endpoint);
+}
+
+/** La configuración de ESTE dispositivo, o null si nunca se prendieron. */
+export async function avisosDeEsteAparato() {
+  if (!puedeAvisar()) return null;
+  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  const sus = await reg?.pushManager.getSubscription().catch(() => null);
+  if (!sus) return null;
+  const filas = ok(
+    await sb().from('ag_push').select('*').eq('endpoint', sus.endpoint).limit(1),
+  );
+  return filas[0] ?? null;
+}
+
+export async function cambiarAvisos(id, cambios) {
+  return ok(await sb().from('ag_push').update(cambios).eq('id', id).select().single());
+}
+
+/**
+ * Manda una notificación de prueba a este dispositivo, ahora mismo.
+ * Va con la sesión de quien la pide: la función verifica que el aparato sea
+ * suyo antes de mandar nada.
+ */
+export async function probarAvisos(id) {
+  return await llamarAvisos({ modo: 'prueba', push_id: id });
+}
+
+// ---------------------------------------------------------------------------
 //  ¿Están subidas las Edge Functions?
 // ---------------------------------------------------------------------------
 
@@ -570,7 +696,7 @@ async function pingFuncion(nombre) {
  * el link del feed en una pestaña, que es lo que dice la pantalla de avisos.
  */
 export async function revisarFunciones() {
-  const nombres = ['chef-ia', 'ics-proxy'];
+  const nombres = ['chef-ia', 'ics-proxy', 'avisos'];
   const resultados = await Promise.all(nombres.map((n) => pingFuncion(n)));
   return nombres.map((nombre, i) => ({ nombre, ...resultados[i] }));
 }

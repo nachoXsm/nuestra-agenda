@@ -10,11 +10,12 @@
 -- ============================================================================
 
 with
--- Las once tablas que tiene que haber creado schema.sql.
+-- Las catorce tablas que tiene que haber creado schema.sql.
 esperadas(t) as (
   values ('ag_hogares'), ('ag_personas'), ('ag_eventos'), ('ag_ocurrencias'),
          ('ag_menu'), ('ag_compras'), ('ag_tareas'), ('ag_calendarios'),
-         ('ag_preferencias'), ('ag_recetas'), ('ag_chef_mensajes')
+         ('ag_preferencias'), ('ag_recetas'), ('ag_chef_mensajes'),
+         ('ag_push'), ('ag_vapid'), ('ag_avisos_config')
 ),
 tablas as (
   select e.t,
@@ -51,7 +52,7 @@ finanzas(t, n) as (
 
 select * from (
 
-  -- 1. ¿Están las once tablas?
+  -- 1. ¿Están las catorce tablas?
   select 1 as orden,
          'Tablas de la agenda' as revisión,
          case when count(*) filter (where oid is null) = 0
@@ -66,8 +67,8 @@ select * from (
   select 2,
          'Seguridad (RLS) prendida',
          case when count(*) filter (where oid is not null and not rls) = 0
-                   and count(*) filter (where oid is not null) = 11
-              then '✅ OK — las 11 tablas protegidas'
+                   and count(*) filter (where oid is not null) = 14
+              then '✅ OK — las 14 tablas protegidas'
               else '❌ SIN PROTEGER: ' ||
                    coalesce(string_agg(t, ', ') filter (where oid is not null and not rls),
                             '(faltan tablas)')
@@ -77,13 +78,23 @@ select * from (
   union all
 
   -- 3. ¿Y las políticas? RLS sin políticas bloquea todo, incluso a ustedes.
+  --
+  -- Menos en dos tablas donde la falta de políticas ES la protección:
+  -- ag_vapid (las claves de firma de los avisos) y ag_avisos_config (el token
+  -- del disparador). Con RLS prendida y sin una sola política, el cliente no
+  -- las lee ni con la clave publishable; solo las funciones, que entran con la
+  -- clave de servicio y saltean RLS.
   select 3,
          'Políticas de acceso',
-         case when count(*) filter (where oid is not null and politicas = 0) = 0
-                   and count(*) filter (where oid is not null) = 11
-              then '✅ OK — ' || sum(politicas) || ' políticas en total'
+         case when count(*) filter (
+                     where oid is not null and politicas = 0
+                       and t not in ('ag_vapid', 'ag_avisos_config')) = 0
+                   and count(*) filter (where oid is not null) = 14
+              then '✅ OK — ' || sum(politicas) || ' políticas, y 2 tablas cerradas a propósito'
               else '❌ SIN POLÍTICAS: ' ||
-                   coalesce(string_agg(t, ', ') filter (where oid is not null and politicas = 0),
+                   coalesce(string_agg(t, ', ') filter (
+                     where oid is not null and politicas = 0
+                       and t not in ('ag_vapid', 'ag_avisos_config')),
                             '(faltan tablas)')
          end
   from tablas

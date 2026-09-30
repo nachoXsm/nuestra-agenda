@@ -16,7 +16,7 @@
 //  tiene que estar al día, y una respuesta vieja acá sería peor que un error.
 // ============================================================================
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `nuestra-agenda-${VERSION}`;
 
 // Lo mínimo para que la app abra sin red. Los PNG del lanzador NO van acá: el
@@ -116,4 +116,68 @@ self.addEventListener('fetch', (e) => {
       }),
     );
   }
+});
+
+
+// ============================================================================
+//  Las notificaciones de juntos
+//
+//  Acá se dibuja lo que se ve en el celular. Es todo lo que el calendario del
+//  sistema no puede dar: el trébol en vez del ícono del calendario, un aviso
+//  por momento en vez de uno por evento, y botones que abren la app en la
+//  pantalla que corresponde.
+//
+//  El contenido llega cifrado desde la función avisos y lo descifra el
+//  navegador solo; acá llega ya en claro.
+// ============================================================================
+
+self.addEventListener('push', (e) => {
+  let aviso = {};
+  try {
+    aviso = e.data ? e.data.json() : {};
+  } catch {
+    // Un push sin cuerpo legible igual merece abrir la app: algo pasó.
+    aviso = { titulo: 'juntos', cuerpo: 'Tenés novedades', ir: 'inicio' };
+  }
+
+  e.waitUntil(
+    self.registration.showNotification(aviso.titulo || 'juntos', {
+      body: aviso.cuerpo || '',
+      icon: 'icons/icon-192-v2.png',
+      badge: 'icons/icon-192-v2.png',
+      lang: 'es-AR',
+      // La etiqueta hace que el aviso del día REEMPLACE al anterior en vez de
+      // apilarse: si alguien no miró el de ayer, no le quedan siete.
+      tag: aviso.etiqueta || 'juntos',
+      renotify: true,
+      requireInteraction: false,
+      data: { ir: aviso.ir || 'inicio' },
+      actions: (aviso.acciones || []).slice(0, 2).map((a) => ({
+        action: a.accion,
+        title: a.titulo,
+      })),
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  // Si tocó un botón, manda a esa sección; si tocó el cuerpo, a la que eligió
+  // la función al armar el aviso.
+  const destino = e.action || (e.notification.data && e.notification.data.ir) || 'inicio';
+  const url = new URL(`./#${destino}`, self.registration.scope).href;
+
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((abiertas) => {
+      // Si la app ya está abierta, se la trae al frente y se la manda a la
+      // sección, en vez de abrir una segunda ventana.
+      for (const c of abiertas) {
+        if (c.url.startsWith(self.registration.scope)) {
+          c.postMessage({ tipo: 'ir', vista: destino });
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });

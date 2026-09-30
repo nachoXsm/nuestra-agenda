@@ -259,6 +259,69 @@ create table if not exists ag_tareas (
 create index if not exists ag_tareas_hogar_ix on ag_tareas (hogar_id, hecha, vence);
 
 -- ----------------------------------------------------------------------------
+--  AVISOS PROPIOS DE LA APP (Web Push)
+--
+--  La agenda tambien se puede publicar como calendario (ver ics-feed), pero eso
+--  hace que los recordatorios los de el calendario del sistema: con la cara de
+--  esa app y su formato. Esto es lo otro: notificaciones de juntos, escritas
+--  por juntos, con el trebol y con botones que llevan a donde hay que ir.
+-- ----------------------------------------------------------------------------
+
+-- Cada navegador que dijo que si. Una persona puede tener varios: el telefono,
+-- la tablet, la compu.
+create table if not exists ag_push (
+  id              uuid primary key default gen_random_uuid(),
+  hogar_id        uuid not null references ag_hogares on delete cascade,
+  user_id         uuid not null references auth.users on delete cascade,
+  persona_id      uuid references ag_personas on delete set null,
+  -- Lo que devuelve pushManager.subscribe(): a donde mandar y con que cifrar.
+  endpoint        text not null,
+  p256dh          text not null,
+  auth            text not null,
+  -- A que hora quiere que le avisen, y que avisos.
+  hora            smallint not null default 8,
+  diario          boolean not null default true,
+  semanal         boolean not null default true,
+  -- La ultima fecha (en Buenos Aires) en que se le mando cada cosa. Es lo que
+  -- evita mandar dos veces lo mismo si el disparador corre de mas.
+  ultimo_diario   date,
+  ultimo_semanal  date,
+  ultimo_error    text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- El endpoint identifica al navegador: si vuelve a suscribirse, se actualiza en
+-- vez de duplicarse.
+create unique index if not exists ag_push_endpoint_uk on ag_push (endpoint);
+create index if not exists ag_push_hogar_ix on ag_push (hogar_id);
+
+-- Las claves VAPID del proyecto. Una sola fila, y NINGUNA politica de RLS: esto
+-- no lo lee el cliente ni con la clave publishable. Solo la funcion, que entra
+-- con la clave de servicio y saltea RLS.
+create table if not exists ag_vapid (
+  id              boolean primary key default true check (id),
+  publica         text not null,
+  privada         text not null,
+  contacto        text not null default 'mailto:avisos@juntos.app',
+  created_at      timestamptz not null default now()
+);
+
+-- Donde tiene que pegar el disparador horario. Lo completa la app sola la
+-- primera vez que alguien prende los avisos, asi nadie tiene que pegar una URL
+-- ni una clave a mano en ningun lado.
+create table if not exists ag_avisos_config (
+  id              boolean primary key default true check (id),
+  url_funcion     text,
+  -- El secreto con el que el disparador se identifica ante la funcion. Se
+  -- genera aca y no sale nunca del proyecto.
+  token           uuid not null default gen_random_uuid(),
+  created_at      timestamptz not null default now()
+);
+
+insert into ag_avisos_config (id) values (true) on conflict (id) do nothing;
+
+-- ----------------------------------------------------------------------------
 --  HISTORIAL DEL CHAT CON EL AGENTE
 -- ----------------------------------------------------------------------------
 create table if not exists ag_chef_mensajes (
@@ -295,6 +358,10 @@ drop trigger if exists ag_tareas_touch on ag_tareas;
 create trigger ag_tareas_touch before update on ag_tareas
   for each row execute function ag_touch_updated_at();
 
+drop trigger if exists ag_push_touch on ag_push;
+create trigger ag_push_touch before update on ag_push
+  for each row execute function ag_touch_updated_at();
+
 -- ============================================================================
 --  RLS — nadie ve nada de un hogar del que no es miembro
 -- ============================================================================
@@ -308,6 +375,9 @@ alter table ag_calendarios    enable row level security;
 alter table ag_preferencias   enable row level security;
 alter table ag_recetas        enable row level security;
 alter table ag_tareas         enable row level security;
+alter table ag_push           enable row level security;
+alter table ag_vapid          enable row level security;
+alter table ag_avisos_config  enable row level security;
 alter table ag_chef_mensajes  enable row level security;
 
 -- ---- ag_hogares -------------------------------------------------------------
@@ -376,6 +446,19 @@ begin
          with check (ag_es_miembro(hogar_id))', t);
   end loop;
 end $$;
+
+-- ---- ag_push ----------------------------------------------------------------
+-- Cada uno ve y maneja SOLO sus propios dispositivos. Ni siquiera los del otro
+-- integrante del hogar: un endpoint de push es la direccion a la que le suena
+-- el telefono a alguien, y no hay razon para que nadie mas la toque.
+drop policy if exists ag_push_propio on ag_push;
+create policy ag_push_propio on ag_push
+  for all using (user_id = auth.uid() and ag_es_miembro(hogar_id))
+  with check (user_id = auth.uid() and ag_es_miembro(hogar_id));
+
+-- ag_vapid y ag_avisos_config no llevan ninguna politica a proposito: con RLS
+-- prendida y sin policies, el cliente no llega ni a leerlas. Solo la funcion,
+-- que entra con la clave de servicio.
 
 -- ag_ocurrencias no tiene hogar_id: hereda el permiso de su evento.
 drop policy if exists ag_ocurrencias_todo on ag_ocurrencias;
@@ -566,6 +649,80 @@ begin
   return v_nuevos;
 end;
 $$;
+
+-- ============================================================================
+--  El disparador de los avisos
+--
+--  Los avisos hay que mandarlos aunque nadie abra la app: esa es toda la
+--  gracia. Asi que algo tiene que llamar a la funcion cada hora.
+--
+--  Se usa pg_cron + pg_net, que viven adentro del mismo proyecto de Supabase:
+--  ningun servicio de afuera, ninguna clave pegada en ningun lado. El cuerpo
+--  del cron lee la URL y el token de ag_avisos_config EN CADA CORRIDA, asi que
+--  se puede programar antes de que existan: mientras la URL este vacia no hace
+--  nada, y la app la completa sola la primera vez que alguien prende los
+--  avisos.
+--
+--  Si el proyecto no deja crear las extensiones, todo esto se saltea sin
+--  romper nada y queda el respaldo: la app dispara la vuelta al abrirse, y en
+--  el repo hay un workflow de GitHub Actions que se puede prender.
+-- ============================================================================
+do $$
+begin
+  create extension if not exists pg_cron;
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'No se pudieron crear pg_cron/pg_net (%). Los avisos van a salir igual cuando alguien abra la app; para que salgan solos, ver SETUP.md.', sqlerrm;
+end $$;
+
+do $$
+begin
+  -- Cada hora en punto. La funcion mira quien pidio los avisos a esta hora.
+  perform cron.unschedule('ag_avisos');
+exception when others then null;
+end $$;
+
+do $$
+begin
+  perform cron.schedule(
+    'ag_avisos',
+    '0 * * * *',
+    $cron$
+      select net.http_post(
+        url := (select url_funcion from ag_avisos_config where url_funcion is not null),
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'x-avisos-token', (select token::text from ag_avisos_config)
+        ),
+        body := '{}'::jsonb
+      )
+      where exists (select 1 from ag_avisos_config where url_funcion is not null);
+    $cron$
+  );
+exception when others then
+  raise notice 'No se pudo programar el aviso horario (%).', sqlerrm;
+end $$;
+
+-- La app guarda acá la URL de su propia función la primera vez que alguien
+-- prende los avisos. Es security definer porque ag_avisos_config no tiene
+-- politicas de RLS: nadie la lee ni la escribe directo.
+create or replace function ag_registrar_url_avisos(p_url text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Hay que estar logueado';
+  end if;
+  -- Solo una URL de funcion de Supabase, y solo la de avisos: esto lo llama el
+  -- cliente, asi que no puede poder apuntar el cron a cualquier lado.
+  if p_url !~ '^https://[a-z0-9-]+\.supabase\.(co|in)/functions/v1/avisos$' then
+    raise exception 'Esa no es la direccion de la funcion de avisos';
+  end if;
+  update ag_avisos_config set url_funcion = p_url where id;
+end;
+$$;
+
+revoke all on function ag_registrar_url_avisos(text) from public;
+grant execute on function ag_registrar_url_avisos(text) to authenticated;
 
 -- ============================================================================
 --  Realtime: que los cambios de uno le aparezcan al otro sin recargar

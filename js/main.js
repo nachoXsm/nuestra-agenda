@@ -294,6 +294,14 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// Al tocar una notificación con la app ya abierta, el service worker manda a
+// qué sección ir. Sin esto, la app se trae al frente pero se queda donde estaba.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.tipo === 'ir' && est.estado.hogar) irA(e.data.vista);
+  });
+}
+
 // ---------------------------------------------------------------------------
 //  Service worker (para que ande sin conexión)
 // ---------------------------------------------------------------------------

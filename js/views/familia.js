@@ -28,6 +28,7 @@ import {
   elegir,
   entrada,
   hoja,
+  interruptor,
   marca,
   pintar,
 } from '../lib/ui.js';
@@ -586,12 +587,173 @@ function abrirImportar(calendario = null) {
 }
 
 // ---------------------------------------------------------------------------
+//  Avisos de la app
+// ---------------------------------------------------------------------------
+
+function abrirAvisosApp() {
+  const cuerpo = el('div');
+
+  async function pintarEstado() {
+    pintar(cuerpo, cargando('Viendo cómo está este aparato…'));
+
+    if (!db.puedeAvisar()) {
+      pintar(cuerpo, el('p.cuerpo-chico', {
+        texto: 'Este navegador no puede mostrar avisos. En iPhone hay que ' +
+          'agregar la app a la pantalla de inicio primero; en una ventana de ' +
+          'incógnito no andan nunca.',
+      }));
+      return;
+    }
+
+    let actual = null;
+    try {
+      actual = await db.avisosDeEsteAparato();
+    } catch (e) {
+      pintar(cuerpo, el('p.cuerpo-chico', { texto: db.mensajeDeError(e) }));
+      return;
+    }
+
+    // --- todavía no están prendidos ---
+    if (!actual) {
+      const btn = el('button.btn.primario.ancho', { type: 'button' }, [
+        icono('campana', { tamano: 16 }),
+        'Prender los avisos en este aparato',
+      ]);
+      const error = el('p.error-campo');
+
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Pidiendo permiso…';
+        error.textContent = '';
+        try {
+          await db.prenderAvisos(est.estado.hogar.id, est.estado.yo?.id ?? null);
+          avisoBien('Listo, ya te van a avisar');
+          await pintarEstado();
+        } catch (e) {
+          error.textContent = db.mensajeDeError(e);
+          btn.disabled = false;
+          pintar(btn, icono('campana', { tamano: 16 }), 'Prender los avisos en este aparato');
+        }
+      });
+
+      pintar(cuerpo,
+        el('p.cuerpo-chico', {
+          estilo: { marginBottom: 'var(--e4)' },
+          texto: db.permisoAvisos() === 'denied'
+            ? 'Este sitio tiene los avisos bloqueados. Hay que permitirlos en los ' +
+              'ajustes del navegador para este sitio y volver acá.'
+            : 'Se prende por aparato: si querés que también te avise en la tablet, ' +
+              'hay que prenderlo ahí.',
+        }),
+        btn,
+        error,
+      );
+      return;
+    }
+
+    // --- ya están prendidos: qué y a qué hora ---
+    const sw = (etiqueta, campo, ayuda) =>
+      el('div', { estilo: { marginBottom: 'var(--e3)' } }, [
+        interruptor(etiqueta, actual[campo], async (v) => {
+          try {
+            actual = await db.cambiarAvisos(actual.id, { [campo]: v });
+          } catch (e) {
+            avisoMal(db.mensajeDeError(e));
+          }
+        }),
+        el('p.ayuda', { texto: ayuda }),
+      ]);
+
+    pintar(cuerpo,
+      el('div.tarjeta.plana', { estilo: { marginBottom: 'var(--e4)' } }, [
+        el('p.etiqueta', { texto: 'Este aparato ya recibe avisos' }),
+      ]),
+
+      sw('Cada mañana', 'diario',
+        'Lo del día en un solo aviso. Si no hay nada, no te molesta.'),
+      sw('Los lunes', 'semanal',
+        'Todo lo de la semana que arranca, de una.'),
+
+      campo(
+        'A qué hora',
+        elegir(
+          Array.from({ length: 24 }, (_, i) => [
+            String(i),
+            `${String(i).padStart(2, '0')}:00`,
+          ]),
+          String(actual.hora),
+          {
+            'on:change': async (e) => {
+              try {
+                actual = await db.cambiarAvisos(actual.id, { hora: Number(e.target.value) });
+                avisoBien('Cambiado');
+              } catch (err) {
+                avisoMal(db.mensajeDeError(err));
+              }
+            },
+          },
+        ),
+      ),
+
+      el('button.btn.linea.ancho.chico', {
+        type: 'button',
+        estilo: { marginTop: 'var(--e3)' },
+        'on:click': async (e) => {
+          const b = e.currentTarget;
+          b.disabled = true;
+          try {
+            await db.probarAvisos(actual.id);
+            avisoBien('Mandado: tendría que llegarte en unos segundos');
+          } catch (err) {
+            avisoMal(db.mensajeDeError(err));
+          } finally {
+            b.disabled = false;
+          }
+        },
+      }, [icono('enviar', { tamano: 15 }), 'Mandarme uno de prueba ahora']),
+
+      el('button.btn.peligro.ancho.chico', {
+        type: 'button',
+        estilo: { marginTop: 'var(--e2)' },
+        'on:click': async () => {
+          const ok = await confirmar({
+            titulo: '¿Apagar los avisos acá?',
+            bajada: 'Dejás de recibirlos en este aparato. En los demás siguen igual.',
+            siTexto: 'Sí, apagar',
+            peligroso: true,
+          });
+          if (!ok) return;
+          try {
+            await db.apagarAvisos();
+            avisoBien('Apagados');
+            await pintarEstado();
+          } catch (e) {
+            avisoMal(db.mensajeDeError(e));
+          }
+        },
+      }, [icono('cerrar', { tamano: 15 }), 'Apagar los avisos acá']),
+    );
+  }
+
+  hoja({
+    titulo: 'Avisos de juntos',
+    bajada: 'Notificaciones de la app: un aviso por momento, escrito para lo que ' +
+      'pasa ese día, y con botones que abren donde hay que ir. No dependen del ' +
+      'calendario del celular.',
+    contenido: cuerpo,
+  });
+
+  pintarEstado();
+}
+
+// ---------------------------------------------------------------------------
 //  ¿Quedaron bien subidas las funciones?
 // ---------------------------------------------------------------------------
 
 const QUE_HACE = {
   'chef-ia': 'El Chef: propone el menú y contesta preguntas.',
   'ics-proxy': 'Importar calendarios por link (.ics del colegio, del club).',
+  'avisos': 'Las notificaciones de la app, a la mañana y los lunes.',
 };
 
 const MARCA_ESTADO = {
@@ -734,7 +896,9 @@ export function vistaFamilia(destino) {
 
   // --- avisos: lo más importante de esta pantalla ---
   const seccionAvisos = el('section.seccion', {}, [
-    el('header', {}, [el('h2', { texto: 'Que el celular avise' })]),
+    el('header', {}, [el('h2', { texto: 'Que te avise' })]),
+
+    // Lo primero es lo de la app: es lo que tiene la cara de juntos.
     el('button.tarjeta', {
       type: 'button',
       estilo: {
@@ -744,17 +908,41 @@ export function vistaFamilia(destino) {
         display: 'flex',
         gap: 'var(--e3)',
         alignItems: 'flex-start',
+        marginBottom: 'var(--e2)',
       },
-      'on:click': abrirAvisos,
+      'on:click': abrirAvisosApp,
     }, [
       el('span', { estilo: { color: 'var(--primario)', flex: 'none' } },
         [icono('campana', { tamano: 22 })]),
       el('span', {}, [
-        el('p.t3', { texto: 'Suscribir el calendario del teléfono' }),
+        el('p.t3', { texto: 'Avisos de juntos' }),
         el('p.cuerpo-chico', {
           estilo: { marginTop: '4px' },
-          texto: 'La agenda aparece en el calendario del celular y los recordatorios ' +
-            'los da el sistema. Se hace una sola vez y no te olvidás más nada.',
+          texto: 'Un aviso a la mañana con lo del día y otro los lunes con la ' +
+            'semana. Los manda la app, no el calendario.',
+        }),
+      ]),
+    ]),
+
+    el('button.tarjeta', {
+      type: 'button',
+      estilo: {
+        width: '100%',
+        textAlign: 'left',
+        display: 'flex',
+        gap: 'var(--e3)',
+        alignItems: 'flex-start',
+      },
+      'on:click': abrirAvisos,
+    }, [
+      el('span', { estilo: { color: 'var(--texto-2)', flex: 'none' } },
+        [icono('agenda', { tamano: 22 })]),
+      el('span', {}, [
+        el('p.t3', { texto: 'Ver la agenda en el calendario' }),
+        el('p.cuerpo-chico', {
+          estilo: { marginTop: '4px' },
+          texto: 'Además, los eventos se pueden ver mezclados con el resto de tus ' +
+            'cosas en el calendario del celular.',
         }),
       ]),
     ]),

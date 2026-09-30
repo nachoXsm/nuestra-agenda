@@ -35,3 +35,11 @@ verify_jwt = true
 # Público a propósito: lo consume el calendario del celular, que no manda JWT.
 # Lo que protege el feed es el token del hogar (ag_hogares.feed_token).
 verify_jwt = false
+
+[functions.avisos]
+# Público a propósito, igual que ics-feed: la dispara pg_cron con pg_net desde
+# la misma base, y pg_net no manda un JWT. Lo que la autoriza es el token de
+# ag_avisos_config, que vive en la base y nunca sale del proyecto. El modo de
+# prueba, que sí lo llama una persona, valida la sesión contra auth por su
+# cuenta antes de mandar nada.
+verify_jwt = false

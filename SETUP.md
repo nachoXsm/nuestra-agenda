@@ -110,6 +110,7 @@ desde el navegador sea una pegada por función:
 | `chef-ia`    | `supabase/funciones-para-pegar/chef-ia.ts`         |
 | `ics-proxy`  | `supabase/funciones-para-pegar/ics-proxy.ts`       |
 | `ics-feed`   | `supabase/funciones-para-pegar/ics-feed.ts`        |
+| `avisos`     | `supabase/funciones-para-pegar/avisos.ts`          |
 
 En **Edge Functions** → **Deploy a new function** → **Via Editor**: ponés el
 nombre de la izquierda, borrás lo que viene de ejemplo y pegás el archivo
@@ -137,15 +138,35 @@ navegador no deja leer la respuesta. Por eso esa fila tiene un botón **Probar**
 que abre el link en una pestaña: si baja un archivo que arranca con
 `BEGIN:VCALENDAR`, está bien.
 
-### Lo que hay que tocar sí o sí en `ics-feed`
+### Lo que hay que tocar sí o sí: dos funciones con Verify JWT en off
 
-En **Edge Functions** → `ics-feed` → **Details**, poné **Verify JWT** en **off**.
+En **Edge Functions** → **Details**, poné **Verify JWT** en **off** en:
 
-Sin esto el calendario del celular no se puede suscribir: los clientes de
-calendario no saben mandar un token de sesión. Lo que protege ese endpoint es el
-token secreto que va en el link.
+- **`ics-feed`** — la llama el calendario del celular, que no sabe mandar un
+  token de sesión. Lo que la protege es el token secreto del link.
+- **`avisos`** — la dispara `pg_cron` desde la misma base, y eso tampoco manda
+  un token de sesión. Lo que la protege es un token que se genera solo y vive
+  en la tabla `ag_avisos_config`, sin salir nunca del proyecto. El modo de
+  prueba, que sí lo llama una persona desde la app, valida la sesión por su
+  cuenta antes de mandar nada.
 
-Las otras dos quedan con Verify JWT en **on**, que es el valor por defecto.
+`chef-ia` e `ics-proxy` quedan con Verify JWT en **on**, que es el valor por
+defecto.
+
+### Los avisos de la app
+
+No hay ninguna clave que generar ni pegar. La primera vez que alguien prende los
+avisos, la función crea el par de claves VAPID y lo guarda en `ag_vapid`, una
+tabla con RLS y **sin una sola política**: no la lee el cliente ni con la clave
+publishable, solo las funciones.
+
+El disparador horario lo programa el propio `schema.sql` con `pg_cron` y
+`pg_net`. Si tu proyecto no deja crear esas extensiones, el script lo avisa y
+sigue sin romper nada; los avisos van a salir igual cada vez que alguien abra la
+app, solo que no solos.
+
+Para prenderlos: **Familia → Que te avise → Avisos de juntos**. Se prende por
+aparato, así que hay que hacerlo en cada teléfono.
 
 ---
 

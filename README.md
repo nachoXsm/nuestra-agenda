@@ -54,11 +54,22 @@ comprar el regalo, sacar la ropa de invierno. Se reparten entre los integrantes,
 se tildan, y las que se repiten dejan sola la de la próxima vuelta. Arriba, cómo
 viene la semana: el porcentaje hecho y una barrita por persona.
 
-**El celular avisa solo.** Esta es la parte que resuelve el "me olvido". La app
-publica la agenda como un calendario `.ics` suscribible; se agrega una vez al
-calendario del teléfono y desde ahí los recordatorios los da el sistema
-operativo, mezclados con el resto de tus cosas. No hacen falta notificaciones
-push, ni claves VAPID, ni un servidor escuchando.
+**Avisos propios, no los del calendario.** Esta es la parte que resuelve el "me
+olvido". La app manda sus propias notificaciones: una a la mañana con el día y
+otra los lunes con la semana.
+
+Lo que las hace distintas de un recordatorio de calendario:
+
+- **Una por momento, no una por cosa.** Cinco eventos no son cinco pings.
+- **El título dice lo que roza, no lo que hay.** "19:00 Natación y 2 cosas más"
+  arriba, y adentro "Se hace tarde y no hay cena pensada" — que es una
+  conclusión de dos datos separados, no un renglón de una agenda.
+- **Si no hay nada, no avisa.** Un aviso diario que a veces dice "no tenés nada"
+  se vuelve ruido y se apaga a la semana.
+- **Botones que abren donde hay que ir**, con el trébol y los colores de la app.
+
+Y además, si se quiere, la agenda se puede publicar como calendario `.ics`
+suscribible para verla mezclada con el resto de las cosas del teléfono.
 
 **Menú semanal.** Un planificador de almuerzo y cena para los siete días, con un
 recetario de comida de casa argentina. Cada comida guarda sus ingredientes.
@@ -142,6 +153,9 @@ supabase/
     chef-ia/                el agente
     ics-proxy/              bajar calendarios de afuera (CORS)
     ics-feed/               publicar la agenda como calendario
+    avisos/                 las notificaciones propias, cada hora
+    _shared/webpush.ts      Web Push a mano, con Web Crypto
+    _shared/avisos-texto.ts cómo se redacta cada aviso
   tests/                    pruebas del esquema sobre un Postgres real
 pruebas/                    pruebas de la interfaz en un navegador real
 ```
