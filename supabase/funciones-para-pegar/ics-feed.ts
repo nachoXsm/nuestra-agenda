@@ -11,6 +11,369 @@
 //  por ningún bundler, así que los tipos y los comentarios están intactos.
 // ===========================================================================
 
+// ───  ────────────────────────────────────────────────────────────────────
+
+// ============================================================================
+//  Fechas y horas, siempre en hora de Buenos Aires.
+//
+//  Decision de fondo: la agenda vive en Buenos Aires, no en la zona del
+//  dispositivo. Si alguien abre la app desde un viaje, tiene que ver "natación
+//  19:00", no "natación 15:00". Asi que:
+//    - para MOSTRAR se formatea con Intl fijando timeZone,
+//    - para GUARDAR se arma el ISO con el offset -03:00 escrito a mano.
+//
+//  Se puede escribir el offset fijo porque Argentina no usa horario de verano
+//  desde 2009. Si algun dia volviera, lo unico que cambia es OFFSET y la forma
+//  de armar el ISO en combinarFechaHora().
+// ============================================================================
+
+export const TZ = 'America/Argentina/Buenos_Aires';
+const OFFSET = '-03:00';
+
+export const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+export const DIAS_LARGOS = [
+  'domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado',
+];
+export const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+export const MESES_CORTOS = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+];
+
+const fmtFecha = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+const fmtHora = new Intl.DateTimeFormat('es-AR', {
+  timeZone: TZ,
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+// ---------------------------------------------------------------------------
+//  Conversiones basicas
+//  Una "fecha" en este archivo es siempre el texto YYYY-MM-DD. Nunca un Date:
+//  los Date arrastran hora y zona, y ahi empiezan los dias corridos.
+// ---------------------------------------------------------------------------
+
+/** Un instante (Date o ISO) -> la fecha YYYY-MM-DD que era en Buenos Aires. */
+export function aFecha(instante) {
+  const d = instante instanceof Date ? instante : new Date(instante);
+  if (Number.isNaN(d.getTime())) return '';
+  // en-CA formatea como YYYY-MM-DD, que es justo lo que queremos.
+  return fmtFecha.format(d);
+}
+
+/** La fecha de hoy en Buenos Aires. */
+export function hoy() {
+  return aFecha(new Date());
+}
+
+/** Un instante -> "19:00" en hora de Buenos Aires. */
+export function aHora(instante) {
+  const d = instante instanceof Date ? instante : new Date(instante);
+  if (Number.isNaN(d.getTime())) return '';
+  return fmtHora.format(d).replace('24:', '00:');
+}
+
+/**
+ * Fecha + hora local -> ISO con offset, listo para guardar en timestamptz.
+ * combinarFechaHora('2026-09-29', '19:00') -> '2026-09-29T19:00:00-03:00'
+ */
+export function combinarFechaHora(fecha, hora) {
+  const hhmm = /^\d{1,2}:\d{2}$/.test(hora || '') ? hora : '00:00';
+  const [h, m] = hhmm.split(':');
+  return `${fecha}T${h.padStart(2, '0')}:${m}:00${OFFSET}`;
+}
+
+/** Partes numericas de una fecha YYYY-MM-DD. */
+export function partes(fecha) {
+  const [a, m, d] = String(fecha).slice(0, 10).split('-').map(Number);
+  return { anio: a, mes: m, dia: d };
+}
+
+// Las cuentas de dias se hacen sobre un Date en UTC al mediodia: asi ningun
+// corrimiento de zona horaria puede cambiar el dia del resultado.
+function aUtc(fecha) {
+  const { anio, mes, dia } = partes(fecha);
+  return new Date(Date.UTC(anio, mes - 1, dia, 12));
+}
+
+function deUtc(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${
+    String(d.getUTCDate()).padStart(2, '0')
+  }`;
+}
+
+/** ¿Es una fecha que existe de verdad? El 31 de febrero no. */
+export function fechaValida(fecha) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha ?? ''))) return false;
+  const { anio, mes, dia } = partes(fecha);
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return false;
+  const d = new Date(Date.UTC(anio, mes - 1, dia));
+  return d.getUTCFullYear() === anio && d.getUTCMonth() === mes - 1 &&
+    d.getUTCDate() === dia;
+}
+
+export function sumarDias(fecha, n) {
+  const d = aUtc(fecha);
+  d.setUTCDate(d.getUTCDate() + n);
+  return deUtc(d);
+}
+
+export function sumarMeses(fecha, n) {
+  const { anio, mes, dia } = partes(fecha);
+  const d = new Date(Date.UTC(anio, mes - 1 + n, 1, 12));
+  // Si el dia no existe en el mes destino (31 de abril), se usa el ultimo.
+  const ultimo = diasDelMes(d.getUTCFullYear(), d.getUTCMonth() + 1);
+  d.setUTCDate(Math.min(dia, ultimo));
+  return deUtc(d);
+}
+
+/** 0 = domingo, 1 = lunes, ... 6 = sabado. */
+export function diaSemana(fecha) {
+  return aUtc(fecha).getUTCDay();
+}
+
+export function diasDelMes(anio, mes) {
+  return new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+}
+
+/** Diferencia en dias entre dos fechas (b - a). */
+export function diasEntre(a, b) {
+  return Math.round((aUtc(b) - aUtc(a)) / 86400000);
+}
+
+/** El lunes de la semana de esa fecha. */
+export function inicioSemana(fecha) {
+  const ds = diaSemana(fecha);
+  // Domingo cuenta como final de semana, no como principio.
+  return sumarDias(fecha, ds === 0 ? -6 : 1 - ds);
+}
+
+export function finSemana(fecha) {
+  return sumarDias(inicioSemana(fecha), 6);
+}
+
+/** Las 7 fechas de la semana de esa fecha, de lunes a domingo. */
+export function semanaDe(fecha) {
+  const lunes = inicioSemana(fecha);
+  return Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i));
+}
+
+/**
+ * La grilla del mes para el calendario: siempre semanas completas de lunes a
+ * domingo, con los dias de los meses vecinos para rellenar.
+ */
+export function grillaMes(anio, mes) {
+  const primero = `${anio}-${String(mes).padStart(2, '0')}-01`;
+  const desde = inicioSemana(primero);
+  const ultimo = `${anio}-${String(mes).padStart(2, '0')}-${diasDelMes(anio, mes)}`;
+  const hasta = finSemana(ultimo);
+
+  const dias = [];
+  for (let f = desde; diasEntre(f, hasta) >= 0; f = sumarDias(f, 1)) {
+    dias.push({ fecha: f, delMes: partes(f).mes === mes });
+  }
+  return dias;
+}
+
+// ---------------------------------------------------------------------------
+//  Texto para mostrar
+// ---------------------------------------------------------------------------
+
+/** "Hoy", "Mañana", "Ayer", o "mar 29 de sep". */
+export function fechaHumana(fecha, referencia = hoy()) {
+  const d = diasEntre(referencia, fecha);
+  if (d === 0) return 'Hoy';
+  if (d === 1) return 'Mañana';
+  if (d === -1) return 'Ayer';
+  if (d === 2) return 'Pasado mañana';
+
+  const { mes, dia } = partes(fecha);
+  const dow = DIAS_CORTOS[diaSemana(fecha)];
+  const texto = `${dow} ${dia} de ${MESES_CORTOS[mes - 1]}`;
+  // Si cae en otro año, se aclara.
+  return partes(fecha).anio !== partes(referencia).anio
+    ? `${texto} de ${partes(fecha).anio}`
+    : texto;
+}
+
+/** Mayúscula en la primera letra y nada más. */
+export function conMayuscula(texto) {
+  const t = String(texto ?? '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** "martes 29 de septiembre". */
+export function fechaLarga(fecha) {
+  const { mes, dia } = partes(fecha);
+  return `${DIAS_LARGOS[diaSemana(fecha)]} ${dia} de ${MESES[mes - 1]}`;
+}
+
+/** "septiembre 2026". */
+export function mesLargo(anio, mes) {
+  return `${MESES[mes - 1]} ${anio}`;
+}
+
+/** "29 sep - 5 oct" para el encabezado de la semana. */
+export function rangoSemanaHumano(fecha) {
+  const dias = semanaDe(fecha);
+  const a = partes(dias[0]);
+  const b = partes(dias[6]);
+  const ma = MESES_CORTOS[a.mes - 1];
+  const mb = MESES_CORTOS[b.mes - 1];
+  return a.mes === b.mes
+    ? `${a.dia} al ${b.dia} de ${ma}`
+    : `${a.dia} ${ma} al ${b.dia} ${mb}`;
+}
+
+/** Cuánto falta, en texto corto: "en 20 min", "en 2 h", "ya pasó". */
+export function faltaPara(instante, ahora = new Date()) {
+  const min = Math.round((new Date(instante) - ahora) / 60000);
+  if (min < -60) return 'ya pasó';
+  if (min < 0) return 'arrancó hace un rato';
+  if (min < 1) return 'ahora';
+  if (min < 60) return `en ${min} min`;
+  const horas = Math.round(min / 60);
+  if (horas < 24) return `en ${horas} h`;
+  return `en ${Math.round(horas / 24)} días`;
+}
+
+// ---------------------------------------------------------------------------
+//  Repeticiones
+//
+//  Tiene que dar EXACTAMENTE lo mismo que el RRULE que arma el feed .ics
+//  (supabase/functions/_shared/ics-build.js). Si los dos no coinciden, la app
+//  muestra una cosa y el calendario del celular otra, que es el peor resultado
+//  posible. Por eso ocurrencias() esta cubierta con pruebas.
+// ---------------------------------------------------------------------------
+
+/**
+ * Las fechas en que cae un evento dentro de un rango.
+ * @param {object} evento  con inicio, repite, repite_dias, repite_hasta
+ * @param {string} desde   YYYY-MM-DD inclusive
+ * @param {string} hasta   YYYY-MM-DD inclusive
+ * @returns {string[]} fechas YYYY-MM-DD ordenadas
+ */
+export function ocurrencias(evento, desde, hasta) {
+  const primera = aFecha(evento.inicio);
+  if (!primera) return [];
+
+  const tope = evento.repite_hasta
+    ? (diasEntre(evento.repite_hasta, hasta) > 0 ? evento.repite_hasta : hasta)
+    : hasta;
+
+  // Nada que expandir si el rango termina antes de que el evento exista.
+  if (diasEntre(primera, tope) < 0) return [];
+
+  const repite = evento.repite || 'no';
+
+  if (repite === 'no') {
+    return (diasEntre(desde, primera) >= 0 && diasEntre(primera, hasta) >= 0)
+      ? [primera]
+      : [];
+  }
+
+  const salida = [];
+  // Nunca antes de la primera vez: un evento no existe antes de empezar.
+  const arranque = diasEntre(desde, primera) > 0 ? primera : desde;
+
+  // diasEntre(a, b) devuelve b - a, asi que "f no pasa el tope" es
+  // diasEntre(f, tope) >= 0. Estaba al revés y vaciaba todas las series.
+  const dentro = (f) =>
+    diasEntre(primera, f) >= 0 && // no antes de la primera vez
+    diasEntre(f, tope) >= 0 && // no despues del tope
+    diasEntre(desde, f) >= 0; // dentro del rango pedido
+
+  switch (repite) {
+    case 'diario': {
+      for (let f = arranque; diasEntre(f, tope) >= 0; f = sumarDias(f, 1)) {
+        if (dentro(f)) salida.push(f);
+      }
+      break;
+    }
+
+    case 'semanal': {
+      const dias = (evento.repite_dias?.length ? evento.repite_dias : [diaSemana(primera)])
+        .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+      // Se recorre semana por semana desde la semana de la primera vez.
+      let lunes = inicioSemana(arranque);
+      while (diasEntre(lunes, tope) >= 0) {
+        for (const ds of dias) {
+          // El lunes es el dia 1; el domingo cierra la semana (dia 7).
+          const f = sumarDias(lunes, ds === 0 ? 6 : ds - 1);
+          if (dentro(f)) salida.push(f);
+        }
+        lunes = sumarDias(lunes, 7);
+      }
+      break;
+    }
+
+    case 'quincenal': {
+      // Cada 14 dias contados desde la primera vez, para no descolgarse.
+      let f = primera;
+      while (diasEntre(f, tope) >= 0) {
+        if (dentro(f)) salida.push(f);
+        f = sumarDias(f, 14);
+      }
+      break;
+    }
+
+    case 'mensual': {
+      const dia = partes(primera).dia;
+      let cursor = primera;
+      while (diasEntre(cursor, tope) >= 0) {
+        const p = partes(cursor);
+        // Si el mes no llega a ese dia (el 31 en febrero), ese mes se saltea,
+        // igual que hace FREQ=MONTHLY.
+        if (dia <= diasDelMes(p.anio, p.mes)) {
+          const f = `${p.anio}-${String(p.mes).padStart(2, '0')}-${
+            String(dia).padStart(2, '0')
+          }`;
+          if (dentro(f)) salida.push(f);
+        }
+        const sig = new Date(Date.UTC(p.anio, p.mes, 1, 12));
+        cursor = deUtc(sig);
+      }
+      break;
+    }
+
+    case 'anual': {
+      const { mes, dia } = partes(primera);
+      for (let a = partes(arranque).anio; a <= partes(tope).anio; a++) {
+        // El 29 de febrero solo existe en año bisiesto: los demas se saltean.
+        if (dia > diasDelMes(a, mes)) continue;
+        const f = `${a}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+        if (dentro(f)) salida.push(f);
+      }
+      break;
+    }
+  }
+
+  return salida.sort();
+}
+
+/** La hora del evento aplicada a otra fecha, para las repeticiones. */
+export function inicioEnFecha(evento, fecha) {
+  if (evento.todo_el_dia) return combinarFechaHora(fecha, '00:00');
+  return combinarFechaHora(fecha, aHora(evento.inicio));
+}
+
+/** Duración del evento en minutos (una hora si no tiene fin). */
+export function duracionMin(evento) {
+  if (!evento.fin) return 60;
+  const min = Math.round((new Date(evento.fin) - new Date(evento.inicio)) / 60000);
+  return min > 0 ? min : 60;
+}
+
 // ─── _shared/ics-build.ts ────────────────────────────────────────────────
 
 // ============================================================================
@@ -22,11 +385,15 @@
 //  exacto con las ocurrencias, que es donde estos archivos se suelen romper.
 // ============================================================================
 
-export const TZ = 'America/Argentina/Buenos_Aires';
+// Se llama ZONA y no TZ porque armar-funciones.mjs pega todos los módulos en
+// un solo archivo, y js/lib/fechas.js —que se reusa acá para expandir las
+// repeticiones— ya exporta un TZ. Dos declaraciones con el mismo nombre en el
+// archivo pegado no compilan.
+export const ZONA = 'America/Argentina/Buenos_Aires';
 
 export const VTIMEZONE = [
   'BEGIN:VTIMEZONE',
-  `TZID:${TZ}`,
+  `TZID:${ZONA}`,
   'X-LIC-LOCATION:America/Argentina/Buenos_Aires',
   'BEGIN:STANDARD',
   'TZOFFSETFROM:-0300',
@@ -95,7 +462,7 @@ export interface PartesLocales {
 }
 
 const FORMATO = new Intl.DateTimeFormat('en-CA', {
-  timeZone: TZ,
+  timeZone: ZONA,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -223,6 +590,10 @@ export function armarRrule(
 //  un servidor (ver feed.test.ts), que es justo lo que hace falta: un .ics mal
 //  armado no da error, simplemente el celular no muestra nada.
 // ============================================================================
+// El expansor de repeticiones se reusa TAL CUAL del frontend, no se copia: es
+// la misma función que dibuja el calendario en la app, y ya tiene una prueba
+// que la compara contra ICAL.js caso por caso. Una segunda implementación acá
+// sería una tercera cosa que mantener sincronizada.
 
 export const ES_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -289,6 +660,94 @@ function textoPlano(status: number, cuerpo: string): Resultado {
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Resúmenes: el aviso de los lunes y el de cada día
+//
+//  Son eventos de todo el día, inventados por el feed, que no existen en la
+//  base. Sirven para lo que un calendario no sabe hacer solo: juntar en un
+//  renglón "esta semana tenés esto" y "hoy hay que hacer esto".
+//
+//  El título es lo que se ve en la notificación del celular, así que lleva la
+//  cuenta adelante. El detalle va en DESCRIPTION, que es lo que se ve al
+//  abrirlo.
+// ---------------------------------------------------------------------------
+
+export interface Tarea {
+  id: string;
+  titulo: string;
+  vence: string | null;
+  hecha: boolean;
+  persona_id: string | null;
+}
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** aaaa-mm-dd de un Date, en hora de Buenos Aires. */
+function diaDe(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(d);
+}
+
+function sumar(fecha: string, n: number): string {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** El lunes de la semana de esa fecha. */
+function lunesDe(fecha: string): string {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  const dow = d.getUTCDay(); // 0 = domingo
+  return sumar(fecha, dow === 0 ? -6 : 1 - dow);
+}
+
+const DIA_CORTO = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const MES_CORTO = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+];
+
+function diaYMes(fecha: string): string {
+  const [, m, d] = fecha.split('-').map(Number);
+  return `${d} ${MES_CORTO[m - 1]}`;
+}
+
+/**
+ * Un evento de todo el día con alarma, para los resúmenes.
+ *
+ * El TRIGGER es positivo y relativo al arranque: un evento de todo el día
+ * empieza a la medianoche, así que PT8H cae a las 8 de la mañana. Con un
+ * trigger negativo la alarma sonaría la noche anterior.
+ */
+function eventoResumen(opciones: {
+  uid: string;
+  fecha: string;
+  titulo: string;
+  detalle: string;
+  horaAviso: number;
+  ahora: string;
+  categoria: string;
+}): string[] {
+  const { uid, fecha, titulo, detalle, horaAviso, ahora, categoria } = opciones;
+  return [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${ahora}`,
+    `DTSTART;VALUE=DATE:${fechaSueltaIcs(fecha)}`,
+    `DTEND;VALUE=DATE:${fechaSueltaIcs(sumar(fecha, 1))}`,
+    `SUMMARY:${esc(titulo)}`,
+    `DESCRIPTION:${esc(detalle)}`,
+    `CATEGORIES:${esc(categoria)}`,
+    // No ocupa el día: es un recordatorio, no un compromiso.
+    'TRANSP:TRANSPARENT',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${esc(titulo)}`,
+    `TRIGGER:PT${horaAviso}H`,
+    'END:VALARM',
+    'END:VEVENT',
+  ];
+}
+
 export async function generarFeed(
   url: URL,
   consultar: Consultar,
@@ -297,6 +756,11 @@ export async function generarFeed(
   const token = url.searchParams.get('token') ?? '';
   const incluir = (url.searchParams.get('incluir') ?? '').split(',');
   const personaFiltro = url.searchParams.get('persona') ?? '';
+  // A qué hora suenan los resúmenes. Entre las 0 y las 23; por defecto a las 8.
+  const horaAviso = Math.min(
+    Math.max(Number(url.searchParams.get('hora') ?? 8) || 8, 0),
+    23,
+  );
 
   if (!ES_UUID.test(hogarId) || !ES_UUID.test(token)) {
     return textoPlano(400, 'Faltan o están mal los parámetros hogar y token.');
@@ -357,7 +821,7 @@ export async function generarFeed(
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(hogar.nombre)}`,
     `X-WR-CALDESC:${esc('Agenda familiar de ' + hogar.nombre)}`,
-    `X-WR-TIMEZONE:${TZ}`,
+    `X-WR-TIMEZONE:${ZONA}`,
     // Cada cuanto conviene que el cliente vuelva a mirar.
     'REFRESH-INTERVAL;VALUE=DURATION:PT2H',
     'X-PUBLISHED-TTL:PT2H',
@@ -393,13 +857,13 @@ export async function generarFeed(
       d.setUTCDate(d.getUTCDate() + 1);
       lineas.push(`DTEND;VALUE=DATE:${fechaSueltaIcs(d.toISOString())}`);
     } else {
-      lineas.push(`DTSTART;TZID=${TZ}:${fechaHoraIcs(inicio)}`);
+      lineas.push(`DTSTART;TZID=${ZONA}:${fechaHoraIcs(inicio)}`);
       const fin = e.fin
         ? partesLocales(e.fin)
         // Sin hora de fin, una hora por defecto, que es lo que espera
         // cualquier calendario.
         : partesLocales(new Date(new Date(e.inicio).getTime() + 3600_000));
-      lineas.push(`DTEND;TZID=${TZ}:${fechaHoraIcs(fin)}`);
+      lineas.push(`DTEND;TZID=${ZONA}:${fechaHoraIcs(fin)}`);
     }
 
     const rrule = armarRrule(
@@ -425,7 +889,7 @@ export async function generarFeed(
         } else {
           const [a, m, d] = fecha.split('-').map(Number);
           lineas.push(
-            `EXDATE;TZID=${TZ}:${
+            `EXDATE;TZID=${ZONA}:${
               fechaHoraIcs({ ...inicio, anio: a, mes: m, dia: d })
             }`,
           );
@@ -449,6 +913,159 @@ export async function generarFeed(
     }
 
     lineas.push('END:VEVENT');
+  }
+
+  // ---- tareas y resúmenes ---------------------------------------------------
+  // Las tareas se traen si hace falta para alguno de los dos avisos.
+  const quiereTareas = incluir.includes('tareas') || incluir.includes('diario');
+  const quiereSemanal = incluir.includes('semanal');
+
+  let tareas: Tarea[] = [];
+  if (quiereTareas || quiereSemanal) {
+    const desdeTareas = sumar(diaDe(new Date()), -7);
+    tareas = await consultar<Tarea[]>(
+      `ag_tareas?hogar_id=eq.${hogarId}&vence=gte.${desdeTareas}` +
+        `&select=id,titulo,vence,hecha,persona_id&order=vence.asc&limit=600`,
+    );
+  }
+
+  const hoyStr = diaDe(new Date());
+
+  // --- cada tarea con fecha, como evento del día ---
+  if (incluir.includes('tareas')) {
+    for (const t of tareas) {
+      if (!t.vence) continue;
+      const fecha = t.vence.slice(0, 10);
+      const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+      const titulo = `${t.hecha ? '✅' : '☑️'} ${t.titulo}` +
+        (duena ? ` (${duena.nombre})` : '');
+
+      lineas.push('BEGIN:VEVENT');
+      lineas.push(`UID:tarea-${t.id}@nuestra-agenda`);
+      lineas.push(`DTSTAMP:${ahora}`);
+      lineas.push(`DTSTART;VALUE=DATE:${fechaSueltaIcs(fecha)}`);
+      lineas.push(`DTEND;VALUE=DATE:${fechaSueltaIcs(sumar(fecha, 1))}`);
+      lineas.push(`SUMMARY:${esc(titulo)}`);
+      lineas.push('CATEGORIES:tarea');
+      lineas.push('TRANSP:TRANSPARENT');
+      lineas.push('END:VEVENT');
+    }
+  }
+
+  // --- el aviso de cada día: las tareas que vencen hoy ---
+  if (incluir.includes('diario')) {
+    // Solo los días que tienen algo: un aviso vacío todos los días deja de
+    // avisar nada a la semana.
+    const porDia = new Map<string, Tarea[]>();
+    for (const t of tareas) {
+      if (!t.vence || t.hecha) continue;
+      const f = t.vence.slice(0, 10);
+      // Ni el pasado lejano ni más de dos meses adelante.
+      if (f < hoyStr || f > sumar(hoyStr, 60)) continue;
+      if (!porDia.has(f)) porDia.set(f, []);
+      porDia.get(f)!.push(t);
+    }
+
+    for (const [fecha, delDia] of [...porDia.entries()].sort()) {
+      const n = delDia.length;
+      const titulo = n === 1
+        ? `☑️ Hoy: ${delDia[0].titulo}`
+        : `☑️ Hoy hay ${n} tareas`;
+      const detalle = delDia
+        .map((t) => {
+          const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+          return `• ${t.titulo}${duena ? ` — ${duena.nombre}` : ''}`;
+        })
+        .join('\n');
+
+      lineas.push(...eventoResumen({
+        uid: `dia-${fecha}@nuestra-agenda`,
+        fecha,
+        titulo,
+        detalle,
+        horaAviso,
+        ahora,
+        categoria: 'resumen',
+      }));
+    }
+  }
+
+  // --- el aviso de los lunes: todo lo de la semana ---
+  if (quiereSemanal) {
+    // Ocho semanas alcanzan: el calendario vuelve a pedir el feed cada dos
+    // horas, así que siempre hay resumen para adelante.
+    for (let n = 0; n < 8; n++) {
+      const lunes = sumar(lunesDe(hoyStr), n * 7);
+      const domingo = sumar(lunes, 6);
+
+      // Las veces que cae cada evento en esa semana, con el mismo expansor que
+      // usa la app para dibujar el calendario.
+      const delaSemana: { fecha: string; texto: string }[] = [];
+      for (const e of eventos) {
+        for (const fecha of ocurrencias(e, lunes, domingo) as string[]) {
+          const cancelada = (e.ag_ocurrencias ?? []).some(
+            (o) => o.fecha.slice(0, 10) === fecha && o.estado === 'cancelado',
+          );
+          if (cancelada) continue;
+          const p = e.persona_id ? porId.get(e.persona_id) : undefined;
+          const hora = e.todo_el_dia
+            ? ''
+            : `${pad2(partesLocales(e.inicio).hora)}:${pad2(partesLocales(e.inicio).minuto)} `;
+          const [, , d] = fecha.split('-').map(Number);
+          const dow = new Date(`${fecha}T12:00:00Z`).getUTCDay();
+          delaSemana.push({
+            fecha,
+            texto: `• ${DIA_CORTO[dow]} ${d} · ${hora}${e.titulo}` +
+              (p ? ` (${p.nombre})` : ''),
+          });
+        }
+      }
+      delaSemana.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+
+      const pendientes = tareas.filter(
+        (t) => !t.hecha && t.vence && t.vence.slice(0, 10) >= lunes &&
+          t.vence.slice(0, 10) <= domingo,
+      );
+
+      const partesTitulo = [];
+      if (delaSemana.length) {
+        partesTitulo.push(
+          `${delaSemana.length} ${delaSemana.length === 1 ? 'actividad' : 'actividades'}`,
+        );
+      }
+      if (pendientes.length) {
+        partesTitulo.push(
+          `${pendientes.length} ${pendientes.length === 1 ? 'tarea' : 'tareas'}`,
+        );
+      }
+
+      const titulo = partesTitulo.length
+        ? `📋 La semana: ${partesTitulo.join(' y ')}`
+        : '📋 La semana viene tranquila';
+
+      const detalle = [
+        `Del ${diaYMes(lunes)} al ${diaYMes(domingo)}.`,
+        '',
+        delaSemana.length ? 'AGENDA' : 'Sin nada anotado en la agenda.',
+        ...delaSemana.map((x) => x.texto),
+        ...(pendientes.length
+          ? ['', 'TAREAS', ...pendientes.map((t) => {
+            const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+            return `• ${t.titulo}${duena ? ` — ${duena.nombre}` : ''}`;
+          })]
+          : []),
+      ].join('\n');
+
+      lineas.push(...eventoResumen({
+        uid: `semana-${lunes}@nuestra-agenda`,
+        fecha: lunes,
+        titulo,
+        detalle,
+        horaAviso,
+        ahora,
+        categoria: 'resumen',
+      }));
+    }
   }
 
   // ---- menu de la semana (opcional) -----------------------------------------

@@ -6,6 +6,11 @@
 //  un servidor (ver feed.test.ts), que es justo lo que hace falta: un .ics mal
 //  armado no da error, simplemente el celular no muestra nada.
 // ============================================================================
+// El expansor de repeticiones se reusa TAL CUAL del frontend, no se copia: es
+// la misma función que dibuja el calendario en la app, y ya tiene una prueba
+// que la compara contra ICAL.js caso por caso. Una segunda implementación acá
+// sería una tercera cosa que mantener sincronizada.
+import { ocurrencias } from '../../../js/lib/fechas.js';
 import {
   armarIcs,
   armarRrule,
@@ -14,7 +19,7 @@ import {
   fechaIcs,
   fechaSueltaIcs,
   partesLocales,
-  TZ,
+  ZONA,
   utcIcs,
   VTIMEZONE,
 } from './ics-build.ts';
@@ -84,6 +89,94 @@ function textoPlano(status: number, cuerpo: string): Resultado {
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Resúmenes: el aviso de los lunes y el de cada día
+//
+//  Son eventos de todo el día, inventados por el feed, que no existen en la
+//  base. Sirven para lo que un calendario no sabe hacer solo: juntar en un
+//  renglón "esta semana tenés esto" y "hoy hay que hacer esto".
+//
+//  El título es lo que se ve en la notificación del celular, así que lleva la
+//  cuenta adelante. El detalle va en DESCRIPTION, que es lo que se ve al
+//  abrirlo.
+// ---------------------------------------------------------------------------
+
+export interface Tarea {
+  id: string;
+  titulo: string;
+  vence: string | null;
+  hecha: boolean;
+  persona_id: string | null;
+}
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** aaaa-mm-dd de un Date, en hora de Buenos Aires. */
+function diaDe(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(d);
+}
+
+function sumar(fecha: string, n: number): string {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** El lunes de la semana de esa fecha. */
+function lunesDe(fecha: string): string {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  const dow = d.getUTCDay(); // 0 = domingo
+  return sumar(fecha, dow === 0 ? -6 : 1 - dow);
+}
+
+const DIA_CORTO = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const MES_CORTO = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+];
+
+function diaYMes(fecha: string): string {
+  const [, m, d] = fecha.split('-').map(Number);
+  return `${d} ${MES_CORTO[m - 1]}`;
+}
+
+/**
+ * Un evento de todo el día con alarma, para los resúmenes.
+ *
+ * El TRIGGER es positivo y relativo al arranque: un evento de todo el día
+ * empieza a la medianoche, así que PT8H cae a las 8 de la mañana. Con un
+ * trigger negativo la alarma sonaría la noche anterior.
+ */
+function eventoResumen(opciones: {
+  uid: string;
+  fecha: string;
+  titulo: string;
+  detalle: string;
+  horaAviso: number;
+  ahora: string;
+  categoria: string;
+}): string[] {
+  const { uid, fecha, titulo, detalle, horaAviso, ahora, categoria } = opciones;
+  return [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${ahora}`,
+    `DTSTART;VALUE=DATE:${fechaSueltaIcs(fecha)}`,
+    `DTEND;VALUE=DATE:${fechaSueltaIcs(sumar(fecha, 1))}`,
+    `SUMMARY:${esc(titulo)}`,
+    `DESCRIPTION:${esc(detalle)}`,
+    `CATEGORIES:${esc(categoria)}`,
+    // No ocupa el día: es un recordatorio, no un compromiso.
+    'TRANSP:TRANSPARENT',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${esc(titulo)}`,
+    `TRIGGER:PT${horaAviso}H`,
+    'END:VALARM',
+    'END:VEVENT',
+  ];
+}
+
 export async function generarFeed(
   url: URL,
   consultar: Consultar,
@@ -92,6 +185,11 @@ export async function generarFeed(
   const token = url.searchParams.get('token') ?? '';
   const incluir = (url.searchParams.get('incluir') ?? '').split(',');
   const personaFiltro = url.searchParams.get('persona') ?? '';
+  // A qué hora suenan los resúmenes. Entre las 0 y las 23; por defecto a las 8.
+  const horaAviso = Math.min(
+    Math.max(Number(url.searchParams.get('hora') ?? 8) || 8, 0),
+    23,
+  );
 
   if (!ES_UUID.test(hogarId) || !ES_UUID.test(token)) {
     return textoPlano(400, 'Faltan o están mal los parámetros hogar y token.');
@@ -152,7 +250,7 @@ export async function generarFeed(
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(hogar.nombre)}`,
     `X-WR-CALDESC:${esc('Agenda familiar de ' + hogar.nombre)}`,
-    `X-WR-TIMEZONE:${TZ}`,
+    `X-WR-TIMEZONE:${ZONA}`,
     // Cada cuanto conviene que el cliente vuelva a mirar.
     'REFRESH-INTERVAL;VALUE=DURATION:PT2H',
     'X-PUBLISHED-TTL:PT2H',
@@ -188,13 +286,13 @@ export async function generarFeed(
       d.setUTCDate(d.getUTCDate() + 1);
       lineas.push(`DTEND;VALUE=DATE:${fechaSueltaIcs(d.toISOString())}`);
     } else {
-      lineas.push(`DTSTART;TZID=${TZ}:${fechaHoraIcs(inicio)}`);
+      lineas.push(`DTSTART;TZID=${ZONA}:${fechaHoraIcs(inicio)}`);
       const fin = e.fin
         ? partesLocales(e.fin)
         // Sin hora de fin, una hora por defecto, que es lo que espera
         // cualquier calendario.
         : partesLocales(new Date(new Date(e.inicio).getTime() + 3600_000));
-      lineas.push(`DTEND;TZID=${TZ}:${fechaHoraIcs(fin)}`);
+      lineas.push(`DTEND;TZID=${ZONA}:${fechaHoraIcs(fin)}`);
     }
 
     const rrule = armarRrule(
@@ -220,7 +318,7 @@ export async function generarFeed(
         } else {
           const [a, m, d] = fecha.split('-').map(Number);
           lineas.push(
-            `EXDATE;TZID=${TZ}:${
+            `EXDATE;TZID=${ZONA}:${
               fechaHoraIcs({ ...inicio, anio: a, mes: m, dia: d })
             }`,
           );
@@ -244,6 +342,159 @@ export async function generarFeed(
     }
 
     lineas.push('END:VEVENT');
+  }
+
+  // ---- tareas y resúmenes ---------------------------------------------------
+  // Las tareas se traen si hace falta para alguno de los dos avisos.
+  const quiereTareas = incluir.includes('tareas') || incluir.includes('diario');
+  const quiereSemanal = incluir.includes('semanal');
+
+  let tareas: Tarea[] = [];
+  if (quiereTareas || quiereSemanal) {
+    const desdeTareas = sumar(diaDe(new Date()), -7);
+    tareas = await consultar<Tarea[]>(
+      `ag_tareas?hogar_id=eq.${hogarId}&vence=gte.${desdeTareas}` +
+        `&select=id,titulo,vence,hecha,persona_id&order=vence.asc&limit=600`,
+    );
+  }
+
+  const hoyStr = diaDe(new Date());
+
+  // --- cada tarea con fecha, como evento del día ---
+  if (incluir.includes('tareas')) {
+    for (const t of tareas) {
+      if (!t.vence) continue;
+      const fecha = t.vence.slice(0, 10);
+      const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+      const titulo = `${t.hecha ? '✅' : '☑️'} ${t.titulo}` +
+        (duena ? ` (${duena.nombre})` : '');
+
+      lineas.push('BEGIN:VEVENT');
+      lineas.push(`UID:tarea-${t.id}@nuestra-agenda`);
+      lineas.push(`DTSTAMP:${ahora}`);
+      lineas.push(`DTSTART;VALUE=DATE:${fechaSueltaIcs(fecha)}`);
+      lineas.push(`DTEND;VALUE=DATE:${fechaSueltaIcs(sumar(fecha, 1))}`);
+      lineas.push(`SUMMARY:${esc(titulo)}`);
+      lineas.push('CATEGORIES:tarea');
+      lineas.push('TRANSP:TRANSPARENT');
+      lineas.push('END:VEVENT');
+    }
+  }
+
+  // --- el aviso de cada día: las tareas que vencen hoy ---
+  if (incluir.includes('diario')) {
+    // Solo los días que tienen algo: un aviso vacío todos los días deja de
+    // avisar nada a la semana.
+    const porDia = new Map<string, Tarea[]>();
+    for (const t of tareas) {
+      if (!t.vence || t.hecha) continue;
+      const f = t.vence.slice(0, 10);
+      // Ni el pasado lejano ni más de dos meses adelante.
+      if (f < hoyStr || f > sumar(hoyStr, 60)) continue;
+      if (!porDia.has(f)) porDia.set(f, []);
+      porDia.get(f)!.push(t);
+    }
+
+    for (const [fecha, delDia] of [...porDia.entries()].sort()) {
+      const n = delDia.length;
+      const titulo = n === 1
+        ? `☑️ Hoy: ${delDia[0].titulo}`
+        : `☑️ Hoy hay ${n} tareas`;
+      const detalle = delDia
+        .map((t) => {
+          const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+          return `• ${t.titulo}${duena ? ` — ${duena.nombre}` : ''}`;
+        })
+        .join('\n');
+
+      lineas.push(...eventoResumen({
+        uid: `dia-${fecha}@nuestra-agenda`,
+        fecha,
+        titulo,
+        detalle,
+        horaAviso,
+        ahora,
+        categoria: 'resumen',
+      }));
+    }
+  }
+
+  // --- el aviso de los lunes: todo lo de la semana ---
+  if (quiereSemanal) {
+    // Ocho semanas alcanzan: el calendario vuelve a pedir el feed cada dos
+    // horas, así que siempre hay resumen para adelante.
+    for (let n = 0; n < 8; n++) {
+      const lunes = sumar(lunesDe(hoyStr), n * 7);
+      const domingo = sumar(lunes, 6);
+
+      // Las veces que cae cada evento en esa semana, con el mismo expansor que
+      // usa la app para dibujar el calendario.
+      const delaSemana: { fecha: string; texto: string }[] = [];
+      for (const e of eventos) {
+        for (const fecha of ocurrencias(e, lunes, domingo) as string[]) {
+          const cancelada = (e.ag_ocurrencias ?? []).some(
+            (o) => o.fecha.slice(0, 10) === fecha && o.estado === 'cancelado',
+          );
+          if (cancelada) continue;
+          const p = e.persona_id ? porId.get(e.persona_id) : undefined;
+          const hora = e.todo_el_dia
+            ? ''
+            : `${pad2(partesLocales(e.inicio).hora)}:${pad2(partesLocales(e.inicio).minuto)} `;
+          const [, , d] = fecha.split('-').map(Number);
+          const dow = new Date(`${fecha}T12:00:00Z`).getUTCDay();
+          delaSemana.push({
+            fecha,
+            texto: `• ${DIA_CORTO[dow]} ${d} · ${hora}${e.titulo}` +
+              (p ? ` (${p.nombre})` : ''),
+          });
+        }
+      }
+      delaSemana.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+
+      const pendientes = tareas.filter(
+        (t) => !t.hecha && t.vence && t.vence.slice(0, 10) >= lunes &&
+          t.vence.slice(0, 10) <= domingo,
+      );
+
+      const partesTitulo = [];
+      if (delaSemana.length) {
+        partesTitulo.push(
+          `${delaSemana.length} ${delaSemana.length === 1 ? 'actividad' : 'actividades'}`,
+        );
+      }
+      if (pendientes.length) {
+        partesTitulo.push(
+          `${pendientes.length} ${pendientes.length === 1 ? 'tarea' : 'tareas'}`,
+        );
+      }
+
+      const titulo = partesTitulo.length
+        ? `📋 La semana: ${partesTitulo.join(' y ')}`
+        : '📋 La semana viene tranquila';
+
+      const detalle = [
+        `Del ${diaYMes(lunes)} al ${diaYMes(domingo)}.`,
+        '',
+        delaSemana.length ? 'AGENDA' : 'Sin nada anotado en la agenda.',
+        ...delaSemana.map((x) => x.texto),
+        ...(pendientes.length
+          ? ['', 'TAREAS', ...pendientes.map((t) => {
+            const duena = t.persona_id ? porId.get(t.persona_id) : undefined;
+            return `• ${t.titulo}${duena ? ` — ${duena.nombre}` : ''}`;
+          })]
+          : []),
+      ].join('\n');
+
+      lineas.push(...eventoResumen({
+        uid: `semana-${lunes}@nuestra-agenda`,
+        fecha: lunes,
+        titulo,
+        detalle,
+        horaAviso,
+        ahora,
+        categoria: 'resumen',
+      }));
+    }
   }
 
   // ---- menu de la semana (opcional) -----------------------------------------

@@ -1093,13 +1093,26 @@ prueba('el link del calendario lleva el hogar y el token', async (nav) => {
   afirmar(link.includes('/functions/v1/ics-feed'), 'tiene que apuntar a la función');
   afirmar(link.includes('hogar=aaaaaaaa-1111'), 'falta el id del hogar');
   afirmar(link.includes('token=bbbbbbbb-2222'), 'falta el token');
-  afirmar(!link.includes('incluir=menu'), 'el menú va aparte, no por defecto');
 
-  // Y con el menú incluido cambia.
-  await pagina.click('.hoja .chip:has-text("Incluir el menú")');
+  // Nada por defecto: los avisos los da la app, no el calendario.
+  afirmar(!link.includes('incluir='), `no tiene que sumar nada de entrada: ${link}`);
+
+  // Los extras se suman en el orden fijo de la lista, no en el de los toques.
+  await pagina.click('.hoja .chip:has-text("Menú de la semana")');
+  await pagina.click('.hoja .chip:has-text("Resumen los lunes")');
   await pagina.waitForTimeout(100);
-  const conMenu = await pagina.innerText('.link-feed');
-  afirmar(conMenu.includes('incluir=menu'), 'el botón tiene que agregar el menú');
+  afirmar(
+    (await pagina.innerText('.link-feed')).includes('incluir=semanal,menu'),
+    'los extras van en orden fijo',
+  );
+
+  // Con un resumen elegido aparece la hora, y se puede cambiar.
+  await pagina.selectOption('.hoja select', '7');
+  await pagina.waitForTimeout(100);
+  afirmar(
+    (await pagina.innerText('.link-feed')).includes('hora=7'),
+    'la hora elegida tiene que ir en el link',
+  );
 
   // Las instrucciones para los dos sistemas. Se usa textContent y no innerText:
   // la hoja tiene scroll y innerText puede dejar afuera lo que no se ve.

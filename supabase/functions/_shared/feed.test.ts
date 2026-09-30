@@ -15,6 +15,7 @@ import {
   type Evento,
   generarFeed,
   type Persona,
+  type Tarea,
 } from './feed.ts';
 
 const HOGAR = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
@@ -48,6 +49,7 @@ function falsoConsultar(datos: {
   eventos?: Evento[];
   personas?: Persona[];
   menu?: ComidaMenu[];
+  tareas?: Tarea[];
 }): { consultar: Consultar; rutas: string[] } {
   const rutas: string[] = [];
   const consultar: Consultar = <T>(ruta: string): Promise<T> => {
@@ -61,6 +63,8 @@ function falsoConsultar(datos: {
       ? (datos.personas ?? [{ id: TOMAS, nombre: 'Tomás', emoji: '🧒' }])
       : tabla === 'ag_menu'
       ? (datos.menu ?? [])
+      : tabla === 'ag_tareas'
+      ? (datos.tareas ?? [])
       : [];
     return Promise.resolve(respuesta as T);
   };
@@ -453,4 +457,156 @@ Deno.test('cada evento tiene un UID estable', async () => {
   assertEquals(uids.length, 2);
   assertEquals(new Set(uids).size, 2, 'los UID no se pueden repetir');
   assertEquals(uids[0], `${e1.id}@nuestra-agenda`);
+});
+
+// ---------------------------------------------------------------------------
+//  Tareas y resúmenes
+// ---------------------------------------------------------------------------
+
+// Fechas relativas a hoy: los resúmenes se generan desde el día en que corren,
+// así que fijar una fecha haría que la prueba dejara de servir mañana.
+function enDias(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+  }).format(d);
+}
+
+function tarea(extra: Partial<Tarea> = {}): Tarea {
+  return {
+    id: 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee',
+    titulo: 'Pagar el gas',
+    vence: enDias(0),
+    hecha: false,
+    persona_id: null,
+    ...extra,
+  };
+}
+
+/** Los VEVENT que tienen esa categoría. */
+function porCategoria(ics: string, categoria: string) {
+  return parsear(ics).getAllSubcomponents('vevent')
+    .filter((v) => v.getFirstPropertyValue('categories') === categoria);
+}
+
+Deno.test('sin pedirlo, no aparecen ni tareas ni resúmenes', async () => {
+  const { consultar, rutas } = falsoConsultar({ tareas: [tarea()] });
+  const r = await generarFeed(url(feedOk), consultar);
+
+  assertEquals(porCategoria(r.cuerpo, 'tarea').length, 0);
+  assertEquals(porCategoria(r.cuerpo, 'resumen').length, 0);
+  // Y ni siquiera se consulta la tabla: es una consulta de más por cada vez
+  // que el celular pide el calendario.
+  assert(!rutas.some((x) => x.startsWith('ag_tareas')), 'no tenía que pedir tareas');
+});
+
+Deno.test('incluir=tareas suma cada tarea como evento del día', async () => {
+  const { consultar } = falsoConsultar({
+    tareas: [tarea({ titulo: 'Pagar el gas', vence: enDias(2), persona_id: TOMAS })],
+  });
+  const r = await generarFeed(url(`${feedOk}&incluir=tareas`), consultar);
+
+  const tareas = porCategoria(r.cuerpo, 'tarea');
+  assertEquals(tareas.length, 1);
+  const ev = new ICAL.Event(tareas[0]);
+  assertStringIncludes(ev.summary, 'Pagar el gas');
+  // De quién es, que es la mitad de para qué sirve verla en el calendario.
+  assertStringIncludes(ev.summary, 'Tomás');
+  assertEquals(ev.startDate.toString().slice(0, 10), enDias(2));
+});
+
+Deno.test('el aviso diario junta las tareas del día y avisa a la hora pedida', async () => {
+  const { consultar } = falsoConsultar({
+    tareas: [
+      tarea({ id: 'a1', titulo: 'Pagar el gas', vence: enDias(1) }),
+      tarea({ id: 'a2', titulo: 'Comprar el regalo', vence: enDias(1), persona_id: TOMAS }),
+      tarea({ id: 'a3', titulo: 'Sacar la basura', vence: enDias(3) }),
+    ],
+  });
+  const r = await generarFeed(url(`${feedOk}&incluir=diario&hora=9`), consultar);
+
+  const avisos = porCategoria(r.cuerpo, 'resumen');
+  assertEquals(avisos.length, 2, 'un aviso por día con tareas, y solo esos');
+
+  const primero = avisos.find((v) =>
+    new ICAL.Event(v).startDate.toString().slice(0, 10) === enDias(1)
+  )!;
+  const ev = new ICAL.Event(primero);
+  assertStringIncludes(ev.summary, '2 tareas');
+  assertStringIncludes(ev.description, 'Pagar el gas');
+  assertStringIncludes(ev.description, 'Comprar el regalo — Tomás');
+
+  // La alarma: 9 horas después de la medianoche, o sea a las 9 de la mañana.
+  const alarma = primero.getFirstSubcomponent('valarm')!;
+  assertEquals(String(alarma.getFirstPropertyValue('trigger')), 'PT9H');
+});
+
+Deno.test('una tarea ya hecha no genera aviso diario', async () => {
+  const { consultar } = falsoConsultar({
+    tareas: [tarea({ vence: enDias(1), hecha: true })],
+  });
+  const r = await generarFeed(url(`${feedOk}&incluir=diario`), consultar);
+  assertEquals(porCategoria(r.cuerpo, 'resumen').length, 0);
+});
+
+Deno.test('el resumen de los lunes lista lo que se repite esa semana', async () => {
+  // Natación todos los martes y jueves, sin fecha de corte.
+  const semanal = {
+    ...base(),
+    titulo: 'Natación',
+    repite: 'semanal',
+    repite_dias: [2, 4],
+    inicio: `${enDias(-30)}T22:00:00Z`,
+  };
+  const { consultar } = falsoConsultar({
+    eventos: [semanal],
+    tareas: [tarea({ titulo: 'Pagar el gas', vence: enDias(1) })],
+  });
+  const r = await generarFeed(url(`${feedOk}&incluir=semanal`), consultar);
+
+  const resumenes = porCategoria(r.cuerpo, 'resumen');
+  assertEquals(resumenes.length, 8, 'ocho semanas para adelante');
+
+  // Todos caen un lunes.
+  for (const v of resumenes) {
+    const f = new ICAL.Event(v).startDate.toString().slice(0, 10);
+    assertEquals(
+      new Date(`${f}T12:00:00Z`).getUTCDay(),
+      1,
+      `${f} tendría que ser lunes`,
+    );
+  }
+
+  const primero = new ICAL.Event(resumenes[0]);
+  // Dos veces por semana: el expansor de repeticiones tiene que haberlas
+  // encontrado sin que nadie las cargue una por una.
+  assertStringIncludes(primero.summary, '2 actividades');
+  assertStringIncludes(primero.description, 'Natación');
+  assertStringIncludes(primero.description, 'AGENDA');
+});
+
+Deno.test('una semana sin nada lo dice, no miente con un cero', async () => {
+  const { consultar } = falsoConsultar({ eventos: [] });
+  const r = await generarFeed(url(`${feedOk}&incluir=semanal`), consultar);
+  const primero = new ICAL.Event(porCategoria(r.cuerpo, 'resumen')[0]);
+  assertStringIncludes(primero.summary, 'tranquila');
+});
+
+Deno.test('los resúmenes no ocupan el día en el calendario', async () => {
+  const { consultar } = falsoConsultar({ tareas: [tarea({ vence: enDias(1) })] });
+  const r = await generarFeed(url(`${feedOk}&incluir=diario,semanal`), consultar);
+  for (const v of porCategoria(r.cuerpo, 'resumen')) {
+    assertEquals(String(v.getFirstPropertyValue('transp')), 'TRANSPARENT');
+  }
+});
+
+Deno.test('la hora del aviso se acota a algo que exista', async () => {
+  const { consultar } = falsoConsultar({ tareas: [tarea({ vence: enDias(1) })] });
+  // ICAL.js normaliza la duración, así que las cero horas vuelven como PT0S.
+  for (const [pedida, esperada] of [['99', 'PT23H'], ['-4', 'PT0S'], ['hola', 'PT8H']]) {
+    const r = await generarFeed(url(`${feedOk}&incluir=diario&hora=${pedida}`), consultar);
+    const alarma = porCategoria(r.cuerpo, 'resumen')[0].getFirstSubcomponent('valarm')!;
+    assertEquals(String(alarma.getFirstPropertyValue('trigger')), esperada);
+  }
 });

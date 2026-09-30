@@ -7,11 +7,15 @@
 //  exacto con las ocurrencias, que es donde estos archivos se suelen romper.
 // ============================================================================
 
-export const TZ = 'America/Argentina/Buenos_Aires';
+// Se llama ZONA y no TZ porque armar-funciones.mjs pega todos los módulos en
+// un solo archivo, y js/lib/fechas.js —que se reusa acá para expandir las
+// repeticiones— ya exporta un TZ. Dos declaraciones con el mismo nombre en el
+// archivo pegado no compilan.
+export const ZONA = 'America/Argentina/Buenos_Aires';
 
 export const VTIMEZONE = [
   'BEGIN:VTIMEZONE',
-  `TZID:${TZ}`,
+  `TZID:${ZONA}`,
   'X-LIC-LOCATION:America/Argentina/Buenos_Aires',
   'BEGIN:STANDARD',
   'TZOFFSETFROM:-0300',
@@ -80,7 +84,7 @@ export interface PartesLocales {
 }
 
 const FORMATO = new Intl.DateTimeFormat('en-CA', {
-  timeZone: TZ,
+  timeZone: ZONA,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',

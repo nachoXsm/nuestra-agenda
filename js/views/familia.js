@@ -84,14 +84,65 @@ function abrirInvitar() {
 //  Avisos en el celular (el feed .ics)
 // ---------------------------------------------------------------------------
 
+// Lo que se puede sumar al calendario, además de los eventos. El valor es lo
+// que entiende el parámetro incluir= del feed.
+const EXTRAS_FEED = [
+  ['semanal', 'Resumen los lunes', 'Todo lo de la semana, en un aviso'],
+  ['diario', 'Tareas del día', 'Cada mañana, lo que vence ese día'],
+  ['tareas', 'Cada tarea en su día', 'Las tareas sueltas, en el calendario'],
+  ['menu', 'Menú de la semana', 'Qué se come cada día'],
+];
+
 function abrirAvisos() {
   const h = est.estado.hogar;
   const base = db.urlFuncion('ics-feed');
-  const url = `${base}?hogar=${h.id}&token=${h.feed_token}`;
-  const urlConMenu = `${url}&incluir=menu`;
 
-  let incluirMenu = false;
-  const cajaUrl = el('div.link-feed', { texto: url });
+  // Nada marcado por defecto: los avisos de verdad los da la app, no el
+  // calendario. Esto queda para quien además quiera verlo ahí.
+  const elegidos = new Set();
+  let hora = 8;
+
+  const armarUrl = () => {
+    let u = `${base}?hogar=${h.id}&token=${h.feed_token}`;
+    if (elegidos.size) {
+      // Orden fijo, así el link no cambia solo por el orden en que se tocó.
+      const orden = EXTRAS_FEED.map(([v]) => v).filter((v) => elegidos.has(v));
+      u += `&incluir=${orden.join(',')}`;
+    }
+    if (elegidos.has('semanal') || elegidos.has('diario')) u += `&hora=${hora}`;
+    return u;
+  };
+
+  const cajaUrl = el('div.link-feed', { texto: armarUrl() });
+  const refrescar = () => {
+    cajaUrl.textContent = armarUrl();
+  };
+
+  const chipsExtras = el('div.chips', {},
+    EXTRAS_FEED.map(([valor, texto]) =>
+      el('button.chip', {
+        type: 'button',
+        texto,
+        'aria-pressed': String(elegidos.has(valor)),
+        'on:click': (e) => {
+          if (elegidos.has(valor)) elegidos.delete(valor);
+          else elegidos.add(valor);
+          e.currentTarget.setAttribute('aria-pressed', String(elegidos.has(valor)));
+          refrescar();
+        },
+      })
+    ));
+
+  const selHora = elegir(
+    Array.from({ length: 24 }, (_, i) => [String(i), `${String(i).padStart(2, '0')}:00`]),
+    String(hora),
+    {
+      'on:change': (e) => {
+        hora = Number(e.target.value);
+        refrescar();
+      },
+    },
+  );
 
   const paso = (n, texto) =>
     el('div.paso', {}, [el('span.n', { texto: String(n) }), el('span', { texto })]);
@@ -103,16 +154,16 @@ function abrirAvisos() {
       'el sistema, que para eso es mucho más confiable, y los eventos se ven ' +
       'mezclados con el resto de tus cosas.',
     contenido: [
-      el('div.chips', { estilo: { marginBottom: '10px' } }, [
-        el('button.chip', {
-          type: 'button',
-          texto: 'Incluir el menú de la semana',
-          'aria-pressed': 'false',
-          'on:click': (e) => {
-            incluirMenu = !incluirMenu;
-            e.currentTarget.setAttribute('aria-pressed', String(incluirMenu));
-            cajaUrl.textContent = incluirMenu ? urlConMenu : url;
-          },
+      el('div.campo', {}, [
+        el('label', { texto: 'Qué sumar además de los eventos' }),
+        chipsExtras,
+      ]),
+      el('div.campo', {}, [
+        el('label', { texto: 'A qué hora avisan los resúmenes' }),
+        selHora,
+        el('p.ayuda', {
+          texto: 'El aviso de los lunes y el de cada día suenan a esta hora. ' +
+            'Los eventos sueltos avisan según lo que elijas en cada uno.',
         }),
       ]),
       cajaUrl,
