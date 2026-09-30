@@ -274,7 +274,8 @@ Lo que cubren:
 ---
 
 <p align="center">
-  <img src="docs/capturas/claro-compras.png" width="32%" alt="Lista de compras por comercio">
-  <img src="docs/capturas/claro-comidas.png" width="32%" alt="Menú de la semana">
-  <img src="docs/capturas/oscuro-inicio.png" width="32%" alt="Inicio, tema oscuro">
+  <img src="docs/capturas/claro-compras.png" width="24%" alt="Lista de compras por comercio">
+  <img src="docs/capturas/claro-comidas.png" width="24%" alt="Menú de la semana">
+  <img src="docs/capturas/claro-avisos.png" width="24%" alt="Avisos de la app">
+  <img src="docs/capturas/oscuro-inicio.png" width="24%" alt="Inicio, tema oscuro">
 </p>

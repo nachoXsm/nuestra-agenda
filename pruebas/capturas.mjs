@@ -203,6 +203,17 @@ const semilla = {
         'marinado con limón y ajo desde hoy. Sale más sabroso y no agrega tiempo.',
     },
   ],
+  // Avisos ya prendidos en este aparato: así la captura muestra los controles
+  // (qué avisos y a qué hora) en vez del botón de prender.
+  permisoAvisos: 'granted',
+  pushAparato: {
+    id: 'push-1',
+    hogar_id: HOGAR,
+    persona_id: 'p1',
+    hora: 8,
+    diario: true,
+    semanal: true,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -271,6 +282,13 @@ async function capturar(tema) {
     await pagina.click(`#barra button[data-vista="${vista}"]`);
     await sacar(vista);
   }
+
+  // La hoja de los avisos de la app, que es lo que reemplaza a los
+  // recordatorios del calendario del celular.
+  await pagina.click('.tarjeta:has-text("Avisos de juntos")');
+  await sacar('avisos');
+  await pagina.keyboard.press('Escape');
+  await pagina.waitForTimeout(300);
 
   // Las tres alturas de la agenda, que son el corazón de la app.
   await pagina.click('#barra button[data-vista="agenda"]');
