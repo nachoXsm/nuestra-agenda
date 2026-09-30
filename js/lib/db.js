@@ -508,6 +508,74 @@ export async function bajarIcsRemoto(url) {
 }
 
 // ---------------------------------------------------------------------------
+//  ¿Están subidas las Edge Functions?
+// ---------------------------------------------------------------------------
+
+/**
+ * Le pregunta a una función si está viva, sin hacerle hacer nada.
+ *
+ * Las tres entienden { modo: 'ping' } y contestan sin salir a la red ni llamar
+ * al modelo, así que esto no gasta cuota ni cuesta plata.
+ *
+ * @returns {Promise<{estado: string, detalle: string}>}
+ *   'bien'      — responde como corresponde
+ *   'sin-clave' — está subida pero le falta el secreto GROQ_KEY
+ *   'no-esta'   — no está subida (404)
+ *   'mal'       — está pero contestó cualquier cosa
+ */
+async function pingFuncion(nombre) {
+  let res;
+  try {
+    const s = await sesion();
+    res = await fetch(urlFuncion(nombre), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${s?.access_token ?? configActual().SUPABASE_ANON_KEY}`,
+        apikey: configActual().SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ modo: 'ping' }),
+    });
+  } catch (e) {
+    // Sin red, o el navegador cortó el pedido. No se puede saber más.
+    return { estado: 'mal', detalle: mensajeDeError(e) };
+  }
+
+  if (res.status === 404) {
+    return { estado: 'no-esta', detalle: 'Todavía no está subida' };
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { estado: 'mal', detalle: 'Rechazó la autorización' };
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) {
+    return { estado: 'mal', detalle: data?.error || `Respondió ${res.status}` };
+  }
+  // Solo chef-ia informa si tiene la clave; para las demás, groq viene undefined.
+  if (data.groq === false) {
+    return { estado: 'sin-clave', detalle: 'Está subida, pero le falta el secreto GROQ_KEY' };
+  }
+  return { estado: 'bien', detalle: 'Responde bien' };
+}
+
+/**
+ * Revisa las funciones que se pueden revisar desde acá.
+ *
+ * ics-feed queda afuera a propósito: para probarla de verdad hay que pedirla
+ * SIN token de sesión, como haría el calendario del celular, y si quedó con
+ * Verify JWT prendido el rechazo lo hace Supabase antes de la función, sin
+ * encabezados de CORS. El navegador no deja leer esa respuesta, así que desde
+ * la app no se distingue "no está" de "está pero con JWT". Se prueba abriendo
+ * el link del feed en una pestaña, que es lo que dice la pantalla de avisos.
+ */
+export async function revisarFunciones() {
+  const nombres = ['chef-ia', 'ics-proxy'];
+  const resultados = await Promise.all(nombres.map((n) => pingFuncion(n)));
+  return nombres.map((nombre, i) => ({ nombre, ...resultados[i] }));
+}
+
+// ---------------------------------------------------------------------------
 //  Agente de IA
 // ---------------------------------------------------------------------------
 

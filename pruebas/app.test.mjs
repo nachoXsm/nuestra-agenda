@@ -1028,6 +1028,60 @@ prueba('la app anda igual aunque las Edge Functions no estén', async (nav) => {
   await contexto.close();
 });
 
+prueba('Familia dice qué funciones están arriba y cuáles faltan', async (nav) => {
+  // Subir las Edge Functions es un paso aparte de la instalación y es donde
+  // más fácil se traba uno. Esta pantalla contesta "¿quedó bien?" sin tener
+  // que ir a buscar el error adentro de una pantalla que no anda.
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: {
+      estadoFunciones: [
+        { nombre: 'chef-ia', estado: 'sin-clave', detalle: 'Está subida, pero le falta el secreto GROQ_KEY' },
+        { nombre: 'ics-proxy', estado: 'no-esta', detalle: 'Todavía no está subida' },
+      ],
+    },
+  });
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Revisar las funciones")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.waitForTimeout(400);
+
+  const texto = await pagina.textContent('.hoja');
+  afirmar(texto.includes('chef-ia'), 'falta chef-ia en la lista');
+  afirmar(texto.includes('GROQ_KEY'), 'tiene que decir que falta el secreto');
+  afirmar(texto.includes('ics-proxy'), 'falta ics-proxy en la lista');
+  afirmar(texto.includes('Todavía no está subida'), 'tiene que decir que falta subirla');
+
+  // ics-feed no se puede probar desde la app, así que ofrece el link.
+  afirmar(texto.includes('ics-feed'), 'falta ics-feed');
+  const link = await pagina.getAttribute('.hoja a[target="_blank"]', 'href');
+  afirmar(link.includes('/functions/v1/ics-feed'), `el link tiene que ir al feed: ${link}`);
+  afirmar(link.includes('token=bbbbbbbb-2222'), 'y llevar el token');
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('con todo subido, Revisar las funciones no marca nada en rojo', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Revisar las funciones")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.waitForTimeout(400);
+
+  const enRojo = await pagina.$$('.hoja .marca.hoy');
+  igual(enRojo.length, 0, 'con todo bien no tiene que haber nada marcado en rojo');
+  igual(
+    (await pagina.$$('.hoja .marca.hecha')).length,
+    2,
+    'las dos que se pueden revisar tienen que decir que andan',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
 prueba('el link del calendario lleva el hogar y el token', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 

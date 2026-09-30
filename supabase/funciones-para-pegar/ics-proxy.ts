@@ -309,6 +309,11 @@ Deno.serve(async (req) => {
   let url = '';
   try {
     const cuerpo = await req.json();
+    // Igual que chef-ia: un modo para saber desde la app si quedó bien subida,
+    // sin salir a bajar nada.
+    if (cuerpo?.modo === 'ping') {
+      return json(req, { ok: true, funcion: 'ics-proxy' });
+    }
     url = String(cuerpo?.url ?? '');
   } catch {
     return json(req, { error: 'El cuerpo tiene que ser JSON con { url }' }, 400);

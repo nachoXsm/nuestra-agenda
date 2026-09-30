@@ -382,7 +382,7 @@ interface Contexto {
 }
 
 interface Pedido {
-  modo?: 'chat' | 'menu';
+  modo?: 'chat' | 'menu' | 'ping';
   mensajes?: { rol: string; contenido: string }[];
   contexto?: Contexto;
   // Para modo 'menu'
@@ -565,6 +565,14 @@ Deno.serve(async (req) => {
     pedido = await req.json();
   } catch {
     return json(req, { error: 'El cuerpo tiene que ser JSON' }, 400);
+  }
+
+  // -------- modo ping: ¿quedó bien subida? ---------------------------------
+  // No llama al modelo ni gasta cuota: solo contesta que está viva y si tiene
+  // cargado el secreto. Lo usa "Revisar las funciones" en la app, que es la
+  // única forma de saber desde afuera si faltó el GROQ_KEY.
+  if (pedido.modo === 'ping') {
+    return json(req, { ok: true, funcion: 'chef-ia', groq: !!Deno.env.get('GROQ_KEY') });
   }
 
   const modo = pedido.modo === 'menu' ? 'menu' : 'chat';

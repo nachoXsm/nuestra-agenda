@@ -82,6 +82,11 @@ const bd = {
   respuestaMenu: null,
   // Para simular un proyecto al que le falta correr el schema.sql de nuevo.
   tablasQueFaltan: [],
+  // Lo que contesta "Revisar las funciones". Por defecto, las dos arriba.
+  estadoFunciones: [
+    { nombre: 'chef-ia', estado: 'bien', detalle: 'Responde bien' },
+    { nombre: 'ics-proxy', estado: 'bien', detalle: 'Responde bien' },
+  ],
   // Para verificar qué contexto se le mandó al agente.
   ultimoPedidoChef: null,
   fallarProximo: null,
@@ -408,6 +413,10 @@ export async function preferencias() {
 export async function guardarPreferencias(hogarId, cambios) {
   bd.preferencias = { ...bd.preferencias, ...cambios };
   return demora(bd.preferencias);
+}
+
+export async function revisarFunciones() {
+  return demora(bd.estadoFunciones.map((f) => ({ ...f })));
 }
 
 // --- tareas -----------------------------------------------------------------

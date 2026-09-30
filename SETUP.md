@@ -123,6 +123,20 @@ entero.
 > `supabase functions deploy chef-ia ics-proxy ics-feed` desde la raíz del repo.
 > El `supabase/config.toml` ya trae la configuración correcta.
 
+### Para saber si quedaron bien
+
+En la app: **Familia** → **Revisar las funciones**. Dice cuáles están arriba,
+cuál falta subir y si a `chef-ia` le falta el secreto. Preguntar no gasta nada:
+las funciones traen un modo `ping` que no llama al modelo ni sale a la red.
+
+`ics-feed` es la única que no se puede revisar desde ahí, y por una razón: para
+probarla de verdad hay que pedirla **sin** token de sesión, como haría el
+calendario del celular. Si le quedó el *Verify JWT* prendido, el rechazo lo hace
+Supabase antes de llegar a la función y sin encabezados de CORS, así que el
+navegador no deja leer la respuesta. Por eso esa fila tiene un botón **Probar**
+que abre el link en una pestaña: si baja un archivo que arranca con
+`BEGIN:VCALENDAR`, está bien.
+
 ### Lo que hay que tocar sí o sí en `ics-feed`
 
 En **Edge Functions** → `ics-feed` → **Details**, poné **Verify JWT** en **off**.

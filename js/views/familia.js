@@ -18,6 +18,7 @@ import { icono } from '../lib/iconos.js';
 import {
   avatar,
   avisoBien,
+  cargando,
   avisoMal,
   campo,
   cerrarHoja,
@@ -27,6 +28,7 @@ import {
   elegir,
   entrada,
   hoja,
+  marca,
   pintar,
 } from '../lib/ui.js';
 import { abrirPreferencias, olvidarChat } from './chef.js';
@@ -533,6 +535,97 @@ function abrirImportar(calendario = null) {
 }
 
 // ---------------------------------------------------------------------------
+//  ¿Quedaron bien subidas las funciones?
+// ---------------------------------------------------------------------------
+
+const QUE_HACE = {
+  'chef-ia': 'El Chef: propone el menú y contesta preguntas.',
+  'ics-proxy': 'Importar calendarios por link (.ics del colegio, del club).',
+};
+
+const MARCA_ESTADO = {
+  bien: ['Anda', 'hecha'],
+  'sin-clave': ['Falta la clave', 'hoy'],
+  'no-esta': ['No está', 'hoy'],
+  mal: ['Algo falla', 'hoy'],
+};
+
+function abrirRevision() {
+  const lista = el('div');
+  const h = est.estado.hogar;
+  const urlFeed = `${db.urlFuncion('ics-feed')}?hogar=${h.id}&token=${h.feed_token}`;
+
+  async function revisar() {
+    pintar(lista, cargando('Preguntándole a las funciones…'));
+    let filas;
+    try {
+      filas = await db.revisarFunciones();
+    } catch (e) {
+      pintar(lista, el('p.cuerpo-chico', { texto: db.mensajeDeError(e) }));
+      return;
+    }
+
+    pintar(lista, ...filas.map((f) => {
+      const [texto, tipo] = MARCA_ESTADO[f.estado] ?? MARCA_ESTADO.mal;
+      return el('div.fila', {}, [
+        el('span.cuerpo-fila', {}, [
+          el('span.fila-titulo', { texto: f.nombre }),
+          el('span.fila-sub', {
+            texto: f.estado === 'bien' ? QUE_HACE[f.nombre] : f.detalle,
+          }),
+        ]),
+        marca(texto, tipo),
+      ]);
+    }));
+
+    // ics-feed no se puede probar desde acá (ver revisarFunciones en db.js):
+    // se prueba abriendo el link, que es lo que haría el celular.
+    lista.append(el('div.fila', { estilo: { marginTop: 'var(--e2)' } }, [
+      el('span.cuerpo-fila', {}, [
+        el('span.fila-titulo', { texto: 'ics-feed' }),
+        el('span.fila-sub', { texto: 'Se prueba abriendo el link, como el celular' }),
+      ]),
+      el('a.btn.chico.suave', {
+        href: urlFeed,
+        target: '_blank',
+        rel: 'noopener',
+        texto: 'Probar',
+      }),
+    ]));
+  }
+
+  hoja({
+    titulo: 'Revisar las funciones',
+    bajada: 'Las tres funciones de Supabase son un paso aparte de la instalación. ' +
+      'Acá se ve cuáles están arriba. Preguntar no gasta nada: no llaman al ' +
+      'modelo ni salen a la red.',
+    contenido: [
+      lista,
+      el('button.btn.linea.ancho.chico', {
+        type: 'button',
+        estilo: { marginTop: 'var(--e4)' },
+        'on:click': () => revisar(),
+      }, [icono('repetir', { tamano: 15 }), 'Revisar de nuevo']),
+      el('p.cuerpo-chico', {
+        estilo: { marginTop: 'var(--e4)' },
+        texto: 'Si alguna dice que no está: Supabase → Edge Functions → Deploy a ' +
+          'new function → Via Editor, con ese mismo nombre, y pegás el archivo ' +
+          'de supabase/funciones-para-pegar/ que se llama igual. A ics-feed, ' +
+          'además, hay que ponerle Verify JWT en off.',
+      }),
+      el('p.cuerpo-chico', {
+        estilo: { marginTop: 'var(--e2)' },
+        texto: 'Si "Probar" de ics-feed baja un archivo o muestra texto que ' +
+          'arranca con BEGIN:VCALENDAR, está bien. Si muestra un error de ' +
+          'autorización, le quedó el Verify JWT prendido.',
+      }),
+    ],
+  });
+
+  revisar();
+}
+
+// ---------------------------------------------------------------------------
 //  La vista
 // ---------------------------------------------------------------------------
 
@@ -724,6 +817,7 @@ export function vistaFamilia(destino) {
     el('header', {}, [el('h2', { texto: 'La app' })]),
     el('div.lista-ajustes', {}, [
       filaAjuste('comidas', 'Cómo comen en casa', null, abrirPreferencias),
+      filaAjuste('alerta', 'Revisar las funciones', null, abrirRevision),
       filaAjuste('chispas', 'Chef', null, () => est.irA('chef')),
       filaAjuste(
         'carrito',
