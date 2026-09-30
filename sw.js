@@ -15,7 +15,7 @@
 //  tiene que estar al día, y una respuesta vieja acá sería peor que un error.
 // ============================================================================
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `nuestra-agenda-${VERSION}`;
 
 // Lo mínimo para que la app abra sin red.
@@ -24,6 +24,7 @@ const PRECARGA = [
   'index.html',
   'css/app.css',
   'js/main.js',
+  'icons/trebol.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'manifest.webmanifest',

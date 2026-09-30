@@ -214,45 +214,32 @@ export function icono(nombre, { tamano = 24, trazo = 1.8, clase = '', titulo = '
 }
 
 /**
- * El trébol de la marca. No es un icono de trazo: son cuatro hojas llenas y un
- * tallo terracota, que es el único acento de color de la identidad.
+ * El trébol de la marca.
+ *
+ * Va como <img> y no como SVG pegado acá adentro por dos razones. Una: el
+ * dibujo son cinco contornos trazados de la imagen original y ocupan 12 KB,
+ * que no tienen por qué viajar dentro del JavaScript ni parsearse en cada
+ * arranque. La otra: a diferencia de los iconos de trazo, el trébol tiene sus
+ * colores propios —una hoja por integrante— así que no necesita heredar
+ * currentColor ni cambiar con el tema.
+ *
+ * La URL se arma contra import.meta.url y no contra el documento: así apunta
+ * bien aunque la app se sirva desde un subdirectorio, como en GitHub Pages.
  */
+const URL_TREBOL = new URL('../../icons/trebol.svg', import.meta.url).href;
+
 export function trebol({ tamano = 28, titulo = '' } = {}) {
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 120 120');
-  svg.setAttribute('width', String(tamano));
-  svg.setAttribute('height', String(tamano));
-
-  if (titulo) {
-    svg.setAttribute('role', 'img');
-    const t = document.createElementNS(NS, 'title');
-    t.textContent = titulo;
-    svg.append(t);
-  } else {
-    svg.setAttribute('aria-hidden', 'true');
+  const img = document.createElement('img');
+  img.src = URL_TREBOL;
+  img.width = tamano;
+  img.height = tamano;
+  img.decoding = 'async';
+  // Un trébol al lado del nombre "juntos" es decoración: el lector de pantalla
+  // ya lee el nombre. Uno solo, sin texto al lado, necesita alternativa.
+  if (titulo) img.alt = titulo;
+  else {
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
   }
-
-  // El tallo se dibuja ANTES que las hojas para que quede detrás: si va
-  // después, el trazo terracota cruza la hoja de abajo a la derecha y el
-  // trébol se lee partido.
-  const tallo = document.createElementNS(NS, 'path');
-  tallo.setAttribute('d', 'M60 60 C76 74 86 90 91 114');
-  tallo.setAttribute('fill', 'none');
-  tallo.setAttribute('stroke', 'var(--acento, #c4674a)');
-  tallo.setAttribute('stroke-width', '7');
-  tallo.setAttribute('stroke-linecap', 'round');
-  svg.append(tallo);
-
-  const hojas = document.createElementNS(NS, 'g');
-  hojas.setAttribute('fill', 'currentColor');
-  for (const [cx, cy] of [[42, 42], [78, 42], [42, 78], [78, 78]]) {
-    const c = document.createElementNS(NS, 'circle');
-    c.setAttribute('cx', cx);
-    c.setAttribute('cy', cy);
-    c.setAttribute('r', '25.46');
-    hojas.append(c);
-  }
-  svg.append(hojas);
-
-  return svg;
+  return img;
 }

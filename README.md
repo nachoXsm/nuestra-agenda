@@ -153,9 +153,17 @@ bordes de 1 px en lugar de sombras, radios generosos y áreas táctiles de 44 px
 como mínimo. El terracota se usa solo para lo de hoy y lo urgente; si estuviera
 en todos lados, dejaría de avisar nada.
 
-El símbolo son cuatro hojas iguales que se tocan en el centro —todos tienen su
-lugar y todos se tocan— y un tallo terracota que las sostiene: el tiempo
-compartido. Está en `icons/trebol.svg`, con las cuentas del radio anotadas.
+El símbolo son cuatro hojas, una de cada color, y un tallo terracota que las
+sostiene: cada integrante tiene su lugar y algo en común los une.
+
+El `icons/trebol.svg` **no está dibujado a mano**: son los contornos de la
+imagen original de la marca (`docs/marca/identidad.webp`), sacados con potrace
+—el mismo trazador que usa Inkscape— separando la imagen por color. La parte
+delicada fue el antialias: clasificar cada píxel por el color más parecido deja
+un anillo de píxeles intermedios alrededor de cada hoja, y esos anillos caen en
+la capa equivocada. Se resuelve conservando solo la mancha conectada más grande
+de cada color, porque cada hoja es una sola. Todo eso está en
+`pruebas/trazar-logo.mjs`, que se puede volver a correr si el original cambia.
 
 Los iconos están dibujados a mano en `js/lib/iconos.js` y no son emoji: el emoji
 lo dibuja el sistema, así que en un Android se ve de una forma, en un iPhone de

@@ -278,8 +278,13 @@ button {
 .cabecera .marca-mini {
   width: 26px;
   height: 26px;
-  color: var(--primario);
   flex: none;
+}
+
+.cabecera .marca-mini img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .cabecera h1 {
@@ -1612,10 +1617,9 @@ select {
   margin-bottom: var(--e6);
 }
 
-.entrada .marca-grande svg {
+.entrada .marca-grande img {
   width: 56px;
   height: 56px;
-  color: var(--primario);
 }
 
 .entrada .marca-grande .nombre {
