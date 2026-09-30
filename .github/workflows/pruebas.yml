@@ -33,7 +33,8 @@ jobs:
       - run: deno task test
       - name: Las funciones de un archivo tienen que estar al día
         # Si alguien toca functions/ y no regenera, lo que se pega en Supabase
-        # queda viejo sin que nadie se entere.
+        # queda viejo sin que nadie se entere. De paso, el armador falla si dos
+        # módulos declaran el mismo nombre: eso el pegue no lo perdona.
         run: node supabase/armar-funciones.mjs --revisar
 
   interfaz:

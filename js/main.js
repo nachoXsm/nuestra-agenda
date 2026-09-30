@@ -268,6 +268,34 @@ async function entrarALaApp() {
 
   est.suscribir(pintarApp);
   pintarApp();
+
+  // Red de seguridad de los avisos (ver empujarAvisos en db.js). Va después de
+  // pintar y sin await a propósito: no tiene que demorar la apertura.
+  empujarLosAvisos(h);
+}
+
+// Con qué fecha se empujó la última vuelta desde este aparato.
+const CLAVE_VUELTA = 'ag_vuelta';
+
+/**
+ * Empuja la vuelta de avisos una vez por día y por aparato.
+ *
+ * Lo de una vez por día es para no molestar a la función en cada apertura; que
+ * no lleguen dos avisos iguales lo garantiza ella, no esto. Si la llamada no
+ * salió (la función no está subida todavía) no se marca el día, así la próxima
+ * apertura lo vuelve a intentar.
+ */
+async function empujarLosAvisos(dia) {
+  let ultima = null;
+  try {
+    ultima = localStorage.getItem(CLAVE_VUELTA);
+  } catch { /* navegador con el storage bloqueado: se llama y listo */ }
+  if (ultima === dia) return;
+
+  if (!await datos.empujarAvisos()) return;
+  try {
+    localStorage.setItem(CLAVE_VUELTA, dia);
+  } catch { /* ídem */ }
 }
 
 // Si se cierra la sesión desde otra pestaña, esta también vuelve al login.

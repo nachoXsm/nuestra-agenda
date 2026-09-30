@@ -904,6 +904,8 @@ export async function enviarPush(
 //  que la autoriza es el token de ag_avisos_config, que vive en la base y no
 //  sale del proyecto.
 // ============================================================================
+// Fechas: las mismas del frontend, no una copia. Redeclararlas acá rompía el
+// archivo de un solo pegue, donde fechas.js queda arriba en el mismo alcance.
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -936,14 +938,6 @@ const horaEn = (d = new Date()) =>
     new Intl.DateTimeFormat('en-GB', { timeZone: ZONA, hour: '2-digit', hour12: false })
       .format(d),
   ) % 24;
-
-function sumarDias(fecha: string, n: number): string {
-  const d = new Date(`${fecha}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-const diaSemana = (fecha: string) => new Date(`${fecha}T12:00:00Z`).getUTCDay();
 
 // --- las claves VAPID, que se generan solas la primera vez -------------------
 
@@ -1068,7 +1062,20 @@ interface FilaPush {
   ultimo_semanal: string | null;
 }
 
-async function darLaVuelta(soloPush?: string): Promise<{
+interface Vuelta {
+  /** Una sola fila: la prueba que se pide desde la app. */
+  soloPush?: string;
+  /** Limita la vuelta a un hogar: la empuja alguien de esa casa. */
+  hogar?: string;
+  /**
+   * Toma tambien las horas que ya pasaron hoy, no solo la hora en punto.
+   * Es para la vuelta que empuja la app: si el disparador no corrio a las 8,
+   * quien abre la app a las 11 igual recibe lo de la manana.
+   */
+  atrasadas?: boolean;
+}
+
+async function darLaVuelta({ soloPush, hogar, atrasadas }: Vuelta = {}): Promise<{
   mirados: number;
   enviados: number;
   errores: number;
@@ -1079,7 +1086,8 @@ async function darLaVuelta(soloPush?: string): Promise<{
 
   const filtro = soloPush
     ? `id=eq.${soloPush}`
-    : `hora=eq.${hora}&or=(diario.eq.true,semanal.eq.true)`;
+    : `hora=${atrasadas ? 'lte' : 'eq'}.${hora}&or=(diario.eq.true,semanal.eq.true)` +
+      (hogar ? `&hogar_id=eq.${hogar}` : '');
   const suscripciones = await rest<FilaPush[]>(
     `ag_push?${filtro}&select=id,hogar_id,endpoint,p256dh,auth,hora,diario,semanal,` +
       `ultimo_diario,ultimo_semanal&limit=200`,
@@ -1189,6 +1197,15 @@ async function darLaVuelta(soloPush?: string): Promise<{
 
 // ---------------------------------------------------------------------------
 
+/** Quien esta pidiendo esto, segun SU sesion. null si no hay sesion valida. */
+async function quienEs(req: Request): Promise<string | null> {
+  const auth = req.headers.get('Authorization') ?? '';
+  const yo = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_KEY, Authorization: auth },
+  }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return yo?.id ?? null;
+}
+
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -1221,24 +1238,50 @@ Deno.serve(async (req) => {
   // sesión. No con el token del disparador: ese no tiene por qué salir nunca
   // de la base, y un token que viaja al navegador es un token filtrado.
   if (pedido.modo === 'prueba') {
-    const auth = req.headers.get('Authorization') ?? '';
-    const yo = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SERVICE_KEY, Authorization: auth },
-    }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-
-    if (!yo?.id) return json(req, { error: 'Hay que estar logueado' }, 401);
+    const yo = await quienEs(req);
+    if (!yo) return json(req, { error: 'Hay que estar logueado' }, 401);
 
     // Y solo puede probar SU propio dispositivo.
     const filas = await rest<{ id: string }[]>(
-      `ag_push?id=eq.${pedido.push_id ?? ''}&user_id=eq.${yo.id}&select=id&limit=1`,
+      `ag_push?id=eq.${pedido.push_id ?? ''}&user_id=eq.${yo}&select=id&limit=1`,
     ).catch(() => []);
     if (!filas.length) return json(req, { error: 'Ese aparato no es tuyo' }, 403);
 
     try {
-      const r = await darLaVuelta(pedido.push_id);
+      const r = await darLaVuelta({ soloPush: pedido.push_id });
       return json(req, { ok: true, ...r });
     } catch (e) {
       console.error('avisos/prueba', e);
+      return json(req, { error: String((e as Error)?.message ?? e) }, 500);
+    }
+  }
+
+  // La red de seguridad: si el proyecto no deja prender pg_cron, la vuelta la
+  // empuja quien abre la app. Va con SU sesion y solo alcanza a SU hogar, y
+  // toma tambien las horas que ya pasaron hoy, porque nadie la disparo a la
+  // hora justa. Mandar dos veces lo mismo no puede: eso lo corta ultimo_diario.
+  if (pedido.modo === 'vuelta') {
+    const yo = await quienEs(req);
+    if (!yo) return json(req, { error: 'Hay que estar logueado' }, 401);
+
+    const casas = await rest<{ hogar_id: string }[]>(
+      `ag_personas?user_id=eq.${yo}&select=hogar_id&limit=10`,
+    ).catch(() => []);
+    if (!casas.length) return json(req, { ok: true, mirados: 0, enviados: 0, errores: 0 });
+
+    try {
+      let total = { mirados: 0, enviados: 0, errores: 0 };
+      for (const c of casas) {
+        const r = await darLaVuelta({ hogar: c.hogar_id, atrasadas: true });
+        total = {
+          mirados: total.mirados + r.mirados,
+          enviados: total.enviados + r.enviados,
+          errores: total.errores + r.errores,
+        };
+      }
+      return json(req, { ok: true, ...total });
+    } catch (e) {
+      console.error('avisos/vuelta', e);
       return json(req, { error: String((e as Error)?.message ?? e) }, 500);
     }
   }

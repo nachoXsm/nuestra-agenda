@@ -663,16 +663,17 @@ $$;
 --  nada, y la app la completa sola la primera vez que alguien prende los
 --  avisos.
 --
---  Si el proyecto no deja crear las extensiones, todo esto se saltea sin
---  romper nada y queda el respaldo: la app dispara la vuelta al abrirse, y en
---  el repo hay un workflow de GitHub Actions que se puede prender.
+--  Si el proyecto no deja crear las extensiones, todo esto se saltea sin romper
+--  nada y queda el respaldo que tiene la app: al abrirse empuja la vuelta del
+--  dia (modo 'vuelta' de la funcion, con la sesion de quien abre y solo para su
+--  hogar). Sale tarde, pero sale, y no hace falta pegar ningun token afuera.
 -- ============================================================================
 do $$
 begin
   create extension if not exists pg_cron;
   create extension if not exists pg_net;
 exception when others then
-  raise notice 'No se pudieron crear pg_cron/pg_net (%). Los avisos van a salir igual cuando alguien abra la app; para que salgan solos, ver SETUP.md.', sqlerrm;
+  raise notice 'No se pudieron crear pg_cron/pg_net (%). Los avisos no van a salir a la hora exacta: van a salir cuando alguien de la casa abra la app. Ver SETUP.md.', sqlerrm;
 end $$;
 
 do $$

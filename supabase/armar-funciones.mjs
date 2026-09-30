@@ -23,6 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const AQUI = fileURLToPath(new URL('.', import.meta.url));
+const RAIZ = resolve(AQUI, '..');
 const SALIDA = join(AQUI, 'funciones-para-pegar');
 const FUNCIONES = ['chef-ia', 'ics-proxy', 'ics-feed', 'avisos'];
 
@@ -55,6 +56,40 @@ function sinImportsLocales(texto) {
   return texto.replace(IMPORT_LOCAL, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * Nombres declarados en el nivel de arriba de un archivo.
+ *
+ * Solo el nivel de arriba, que es justo donde el pegado los junta a todos en
+ * el mismo alcance. Por eso el regex ancla al principio de línea: lo que está
+ * indentado vive adentro de otra cosa y no choca con nada.
+ */
+const DECLARACION =
+  /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
+
+function declaradosArriba(texto) {
+  return [...texto.matchAll(DECLARACION)].map((m) => m[1]);
+}
+
+/**
+ * Dos archivos que declaran el mismo nombre.
+ *
+ * Esto es lo único que el pegado puede romper y que en el código original no
+ * se ve: cada archivo por separado compila bien, y el de un solo pegue tira
+ * "Identifier has already been declared" apenas Supabase lo carga. Pasó con
+ * sumarDias, que estaba en fechas.js y también en la función de avisos.
+ */
+function choques(archivos) {
+  const donde = new Map();
+  for (const { ruta, texto } of archivos) {
+    for (const nombre of declaradosArriba(sinImportsLocales(texto))) {
+      if (!donde.has(nombre)) donde.set(nombre, []);
+      const lista = donde.get(nombre);
+      if (!lista.includes(ruta)) lista.push(ruta);
+    }
+  }
+  return [...donde].filter(([, rutas]) => rutas.length > 1);
+}
+
 function encabezado(nombre) {
   return `// ===========================================================================
 //  ${nombre} — TODO EN UN ARCHIVO, para pegar en el editor de Supabase.
@@ -75,6 +110,18 @@ async function armar(nombre) {
   const entrada = join(AQUI, 'functions', nombre, 'index.ts');
   const archivos = await enOrdenDeDependencia(entrada);
 
+  const repetidos = choques(archivos);
+  if (repetidos.length) {
+    console.error(`\n${nombre}: dos archivos declaran el mismo nombre.`);
+    console.error('En un solo archivo eso no compila. Hay que renombrar uno, o');
+    console.error('mejor, que uno importe al otro en vez de tener su copia.\n');
+    for (const [nombre2, rutas] of repetidos) {
+      const cortas = rutas.map((r) => r.slice(RAIZ.length + 1)).join('  y  ');
+      console.error(`  ${nombre2}: ${cortas}`);
+    }
+    process.exit(1);
+  }
+
   const partes = archivos.map(({ ruta, texto }) => {
     const relativa = ruta.slice(join(AQUI, 'functions').length + 1);
     return `// ─── ${relativa} ${'─'.repeat(Math.max(0, 68 - relativa.length))}\n\n` +
@@ -87,7 +134,7 @@ async function armar(nombre) {
 // ---------------------------------------------------------------------------
 
 const revisar = process.argv.includes('--revisar');
-let desactualizados = [];
+const desactualizados = [];
 
 await mkdir(SALIDA, { recursive: true });
 

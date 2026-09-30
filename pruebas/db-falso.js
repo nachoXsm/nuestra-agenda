@@ -93,6 +93,7 @@ const bd = {
   permisoAvisos: 'default',
   pushAparato: null,
   pruebasMandadas: 0,
+  vueltasEmpujadas: 0,
   // Para verificar qué contexto se le mandó al agente.
   ultimoPedidoChef: null,
   fallarProximo: null,
@@ -535,6 +536,18 @@ export async function probarAvisos() {
   await demora();
   bd.pruebasMandadas = (bd.pruebasMandadas ?? 0) + 1;
   return { ok: true, enviados: 1 };
+}
+
+export async function empujarAvisos() {
+  await demora();
+  bd.vueltasEmpujadas = (bd.vueltasEmpujadas ?? 0) + 1;
+  // El null lo devuelve la de verdad cuando la función no está subida: con
+  // fallarProximo se puede probar que entonces no se marca el día.
+  if (bd.fallarProximo === 'empujarAvisos') {
+    bd.fallarProximo = null;
+    return null;
+  }
+  return { ok: true, mirados: 0, enviados: 0, errores: 0 };
 }
 
 // --- calendarios ------------------------------------------------------------

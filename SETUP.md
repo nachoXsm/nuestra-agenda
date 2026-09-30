@@ -162,8 +162,10 @@ publishable, solo las funciones.
 
 El disparador horario lo programa el propio `schema.sql` con `pg_cron` y
 `pg_net`. Si tu proyecto no deja crear esas extensiones, el script lo avisa y
-sigue sin romper nada; los avisos van a salir igual cada vez que alguien abra la
-app, solo que no solos.
+sigue sin romper nada: queda el respaldo que trae la app, que empuja la vuelta
+del día la primera vez que alguien de la casa la abre. Los avisos salen igual,
+pero tarde —a la hora en que alguien abrió, no a la que elegiste— y solo si
+alguien abre.
 
 Para prenderlos: **Familia → Que te avise → Avisos de juntos**. Se prende por
 aparato, así que hay que hacerlo en cada teléfono.

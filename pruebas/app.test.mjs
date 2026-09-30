@@ -1186,6 +1186,54 @@ prueba('un navegador que no puede avisar lo explica, no ofrece un botón muerto'
   await contexto.close();
 });
 
+prueba('al abrir la app se empuja la vuelta de avisos, una sola vez por día', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+  await pagina.waitForTimeout(300);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.vueltasEmpujadas),
+    1,
+    'la primera apertura del día tiene que empujar la vuelta',
+  );
+
+  // Segunda apertura el mismo día: no se vuelve a llamar. Lo que evita mandar
+  // dos veces lo mismo es la función, pero tampoco hace falta molestarla.
+  await pagina.reload({ waitUntil: 'domcontentloaded' });
+  await pagina.waitForSelector('#barra:not(.oculto)', { timeout: 15_000 });
+  await pagina.waitForTimeout(400);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.vueltasEmpujadas),
+    0,
+    'la segunda apertura del mismo día no tiene que llamar de nuevo',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('si la función de avisos no está, se reintenta en la próxima apertura', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav, {
+    semilla: { fallarProximo: 'empujarAvisos' },
+  });
+  await pagina.waitForTimeout(400);
+
+  // El día no se marca si la llamada no salió: la app recién instalada, con la
+  // función todavía sin subir, no se puede quedar sin avisos hasta mañana.
+  await pagina.reload({ waitUntil: 'domcontentloaded' });
+  await pagina.waitForSelector('#barra:not(.oculto)', { timeout: 15_000 });
+  await pagina.waitForTimeout(400);
+
+  igual(
+    await bd(pagina, () => globalThis.__falso.vueltasEmpujadas),
+    1,
+    'tenía que volver a intentar',
+  );
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
 prueba('el link del calendario lleva el hogar y el token', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 

@@ -161,6 +161,15 @@ que dice el documento.
 del cron lee la URL y el token de `ag_avisos_config` en cada corrida, y la app
 completa esa URL sola la primera vez que alguien prende los avisos.
 
+Hay proyectos donde esas extensiones no se pueden crear, así que la app trae un
+respaldo: al abrirse llama a la función en modo `vuelta`, una vez por día y por
+aparato. Ese modo se autoriza con la sesión de quien abrió y alcanza solo a su
+hogar, y toma también las horas que ya pasaron hoy —si el disparador no corrió a
+las 8, quien abre a las 11 igual recibe lo de la mañana—. Que no lleguen dos
+avisos iguales no depende de eso: cada fila de `ag_push` guarda qué día se le
+mandó cada tipo, y la segunda vuelta no hace nada. Es un respaldo, no un
+reemplazo: si nadie abre la app, no sale nada.
+
 Las claves VAPID se generan solas la primera vez y viven en `ag_vapid`, que
 tiene RLS prendida y **ninguna política**. Esa ausencia es la protección: sin
 políticas, el cliente no la lee ni con la clave publishable; solo las funciones,

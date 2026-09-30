@@ -3,11 +3,14 @@
     "Solo para desarrollo. Las Edge Functions las corre Supabase con su propio runtime,",
     "y la app la sirve GitHub Pages como archivos estáticos: nada de esto se publica.",
     "pruebas/ queda fuera del lint a propósito: db-falso.js imita una API asíncrona,",
-    "así que tiene funciones async sin await por diseño."
+    "así que tiene funciones async sin await por diseño.",
+    "Los archivos de funciones-para-pegar/ no se chequean con deno check: adentro",
+    "llevan módulos .js sin tipos, que ahí son implicit any. Lo que sí los rompe",
+    "—dos módulos declarando el mismo nombre— lo detecta armar-funciones.mjs."
   ],
   "tasks": {
     "test": "deno test --allow-net --allow-env --allow-read --allow-sys js/ supabase/functions/",
-    "check": "deno check supabase/functions/chef-ia/index.ts supabase/functions/ics-proxy/index.ts supabase/functions/ics-feed/index.ts",
+    "check": "deno check supabase/functions/chef-ia/index.ts supabase/functions/ics-proxy/index.ts supabase/functions/ics-feed/index.ts supabase/functions/avisos/index.ts",
     "lint": "deno lint",
     "fmt": "deno fmt --check js/ supabase/functions/"
   },
