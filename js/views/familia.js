@@ -731,12 +731,13 @@ export function vistaFamilia(destino) {
         String(est.comprasPendientes().length),
         () => est.irA('comidas', { tabComidas: 'compras' }),
       ),
+      // El mismo cambio que el botón de la cabecera, por si alguien lo busca acá.
       filaAjuste(
-        tema === 'claro' ? 'sol' : 'luna',
+        tema === 'oscuro' ? 'luna' : 'sol',
         'Tema',
-        el('div', { estilo: { marginLeft: 'auto', maxWidth: '150px' } }, [
+        el('div', { estilo: { marginLeft: 'auto', maxWidth: '130px' } }, [
           elegir(
-            [['auto', 'Como el sistema'], ['oscuro', 'Oscuro'], ['claro', 'Claro']],
+            [['claro', 'Claro'], ['oscuro', 'Oscuro']],
             tema,
             { 'on:change': (e) => est.ponerTema(e.target.value) },
           ),

@@ -153,6 +153,11 @@ bordes de 1 px en lugar de sombras, radios generosos y áreas táctiles de 44 px
 como mínimo. El terracota se usa solo para lo de hoy y lo urgente; si estuviera
 en todos lados, dejaría de avisar nada.
 
+**La app abre en claro, siempre.** No mira la preferencia del sistema: el marfil
+es la identidad, no una de dos opciones equivalentes, y así se ve igual en los
+dos teléfonos. El oscuro está a un toque, con el botón de la cabecera, y lo que
+se elija queda guardado.
+
 El símbolo son cuatro hojas, una de cada color, y un tallo terracota que las
 sostiene: cada integrante tiene su lugar y algo en común los une.
 

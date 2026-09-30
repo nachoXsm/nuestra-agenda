@@ -6,8 +6,9 @@
 <title>juntos</title>
 <meta name="description" content="La agenda de la familia, el menú de la semana y lo que hay que hacer, en un solo lugar.">
 
-<meta name="theme-color" content="#111513" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f7f3ec" media="(prefers-color-scheme: light)">
+<!-- El color de la barra del sistema. Arranca en claro, que es el tema por
+     defecto, y lo actualiza estado.js cuando se cambia de tema. -->
+<meta name="theme-color" id="color-barra" content="#f7f3ec">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -26,13 +27,21 @@
 </head>
 <body>
 
-<!-- Se pinta el tema guardado antes de que aparezca nada, así no hay un
-     flash de marfil al abrir la app de noche. -->
+<!-- El tema se pinta antes de que aparezca nada, así no hay un parpadeo al
+     abrir. El que manda es el elegido a mano; si nunca se eligió, claro. No se
+     mira la preferencia del sistema a propósito: la app es de marfil, y quien
+     la quiera oscura la cambia con el botón de la cabecera. -->
 <script>
-  try {
-    var t = localStorage.getItem('ag_tema');
-    if (t === 'claro' || t === 'oscuro') document.documentElement.dataset.tema = t;
-  } catch (e) { /* localStorage bloqueado */ }
+  (function () {
+    var t = 'claro';
+    try {
+      var g = localStorage.getItem('ag_tema');
+      if (g === 'claro' || g === 'oscuro') t = g;
+    } catch (e) { /* localStorage bloqueado */ }
+    document.documentElement.dataset.tema = t;
+    var m = document.getElementById('color-barra');
+    if (m) m.content = t === 'oscuro' ? '#111513' : '#f7f3ec';
+  })();
 </script>
 
 <div id="app">

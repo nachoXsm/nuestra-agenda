@@ -81,10 +81,21 @@ function pintarApp() {
 
   // Encabezado: el trébol y el nombre de la sección. En Inicio dice "juntos",
   // que es la única pantalla donde la marca tiene lugar.
+  const oscuro = est.temaGuardado() === 'oscuro';
   pintar(cabecera,
     el('span.marca-mini', {}, [trebol({ tamano: 26 })]),
     el('h1', { id: 'titulo', texto: vista.titulo() }),
-    el('div', { id: 'acciones-cabecera' }, vista.acciones?.() ?? []),
+    el('div', { id: 'acciones-cabecera' }, [
+      ...(vista.acciones?.() ?? []),
+      // El cambio de tema va en todas las pantallas y no escondido en Familia:
+      // se usa según la hora del día, no una vez y nunca más.
+      el('button.btn-icono', {
+        type: 'button',
+        'aria-label': oscuro ? 'Pasar al tema claro' : 'Pasar al tema oscuro',
+        'aria-pressed': String(oscuro),
+        'on:click': () => est.alternarTema(),
+      }, [icono(oscuro ? 'sol' : 'luna', { tamano: 20 })]),
+    ]),
   );
 
   // Marca en la barra qué sección está abierta.

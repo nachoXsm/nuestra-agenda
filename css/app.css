@@ -68,6 +68,9 @@
   color-scheme: light;
 }
 
+/* El tema oscuro. No hay bloque de prefers-color-scheme a propósito: el tema
+   lo elige la persona con el botón de la cabecera, y por defecto es claro. Si
+   por algo no llegara a ponerse data-tema, el :root de arriba ya es el claro. */
 :root[data-tema='oscuro'] {
   --fondo: #111513;
   --superficie: #1a201d;
@@ -99,36 +102,6 @@
   --cat-otro: #a6aba3;
 
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-tema='claro']):not([data-tema='oscuro']) {
-    --fondo: #111513;
-    --superficie: #1a201d;
-    --superficie-2: #232b27;
-    --linea: #2f3833;
-    --texto: #efeae0;
-    --texto-2: #a6aba3;
-    --primario: #86b59f;
-    --acento: #e38b6d;
-    --info: #7fb0bc;
-    --salvia-claro: #243029;
-    --arena: #2b2a23;
-    --terracota-claro: #35251f;
-    --terracota-texto: #e9a88e;
-    --sobre-primario: #111513;
-    --sobre-acento: #111513;
-    --cat-familia: #7fb79f;
-    --cat-hijo: #7fb0bc;
-    --cat-colegio: #dcb35f;
-    --cat-salud: #8fbfa3;
-    --cat-pareja: #e38b6d;
-    --cat-trabajo: #bf96b4;
-    --cat-cumple: #e9a88e;
-    --cat-tramite: #b3c184;
-    --cat-otro: #a6aba3;
-    color-scheme: dark;
-  }
 }
 
 html {
@@ -285,6 +258,32 @@ button {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* El botón de tema, y cualquier otra acción de la cabecera. 44 px de área
+   táctil aunque el dibujo mida 20. */
+#acciones-cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--e1);
+  flex: none;
+}
+
+.btn-icono {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--texto-2);
+  flex: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-icono:active {
+  background: var(--superficie-2);
+  color: var(--texto);
 }
 
 .cabecera h1 {
@@ -649,14 +648,6 @@ main {
   --tinte-fondo: color-mix(in srgb, var(--tinte) 24%, var(--superficie));
   --tinte-texto: color-mix(in srgb, var(--tinte) 45%, #ffffff);
   --tinte-linea: color-mix(in srgb, var(--tinte) 55%, var(--linea));
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-tema='claro']):not([data-tema='oscuro']) [style*='--tinte'] {
-    --tinte-fondo: color-mix(in srgb, var(--tinte) 24%, var(--superficie));
-    --tinte-texto: color-mix(in srgb, var(--tinte) 45%, #ffffff);
-    --tinte-linea: color-mix(in srgb, var(--tinte) 55%, var(--linea));
-  }
 }
 
 /* ---------------------------------------------------------------- avatares */

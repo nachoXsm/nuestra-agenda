@@ -456,25 +456,39 @@ export function irA(vista, extra = {}) {
 //  Tema
 // ---------------------------------------------------------------------------
 
+// El color de la barra del sistema en cada tema. Son los mismos --fondo del
+// CSS; si alguno cambia allá, cambiarlo acá.
+const COLOR_BARRA = { claro: '#f7f3ec', oscuro: '#111513' };
+
+/**
+ * El tema elegido. Por defecto claro: la app es de marfil, y el oscuro es una
+ * opción, no la mitad de la identidad. No se mira prefers-color-scheme a
+ * propósito, para que abra siempre igual en los dos teléfonos.
+ */
 export function temaGuardado() {
   try {
-    return localStorage.getItem('ag_tema') ?? 'auto';
+    const t = localStorage.getItem('ag_tema');
+    return t === 'oscuro' || t === 'claro' ? t : 'claro';
   } catch {
-    return 'auto';
+    return 'claro';
   }
 }
 
 export function ponerTema(tema) {
+  const t = tema === 'oscuro' ? 'oscuro' : 'claro';
+  document.documentElement.dataset.tema = t;
+  // La barra de arriba del celular también, si no queda de otro color que la app.
+  const meta = document.getElementById('color-barra');
+  if (meta) meta.content = COLOR_BARRA[t];
   try {
-    if (tema === 'auto') {
-      localStorage.removeItem('ag_tema');
-      document.documentElement.removeAttribute('data-tema');
-    } else {
-      localStorage.setItem('ag_tema', tema);
-      document.documentElement.dataset.tema = tema;
-    }
-  } catch { /* localStorage bloqueado */ }
+    localStorage.setItem('ag_tema', t);
+  } catch { /* localStorage bloqueado: el tema vale para esta sesión */ }
   avisar();
+}
+
+/** Pasa de claro a oscuro y al revés. Lo usa el botón de la cabecera. */
+export function alternarTema() {
+  ponerTema(temaGuardado() === 'oscuro' ? 'claro' : 'oscuro');
 }
 
 // ---------------------------------------------------------------------------

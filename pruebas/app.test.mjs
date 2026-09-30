@@ -1286,6 +1286,97 @@ prueba('lo que devuelve el agente tampoco se interpreta como HTML', async (nav) 
   await contexto.close();
 });
 
+prueba('la app abre en claro aunque el sistema esté en oscuro', async (nav) => {
+  // La app es de marfil. Que el teléfono esté en modo oscuro no tiene que
+  // decidir cómo se ve: eso lo elige la persona, con el botón de la cabecera.
+  const contexto = await nav.newContext({
+    viewport: { width: 400, height: 860 },
+    timezoneId: 'America/Argentina/Buenos_Aires',
+    locale: 'es-AR',
+    colorScheme: 'dark',
+  });
+  const pagina = await contexto.newPage();
+  const errores = [];
+  pagina.on('pageerror', (e) => errores.push(`pageerror: ${e.message}`));
+
+  await pagina.route('**/js/lib/db.js', async (ruta) => {
+    await ruta.fulfill({
+      status: 200,
+      contentType: 'text/javascript; charset=utf-8',
+      body: await readFile(join(RAIZ, 'pruebas/db-falso.js'), 'utf8'),
+    });
+  });
+  await pagina.route(/fonts\.(googleapis|gstatic)\.com/, (r) =>
+    r.fulfill({ status: 200, contentType: 'text/css', body: '' })
+  );
+  await pagina.clock.setFixedTime(AHORA);
+  await pagina.goto(`http://localhost:${PUERTO}/`, { waitUntil: 'domcontentloaded' });
+  await pagina.waitForSelector('#barra:not(.oculto)', { timeout: 10_000 });
+
+  igual(
+    await pagina.getAttribute('html', 'data-tema'),
+    'claro',
+    'sin nada elegido tiene que abrir en claro',
+  );
+  // Y el fondo tiene que ser claro de verdad, no solo el atributo.
+  const fondo = await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const [r, g, b] = fondo.match(/\d+/g).map(Number);
+  afirmar(r > 200 && g > 200 && b > 200, `el fondo tiene que ser claro, y es ${fondo}`);
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
+prueba('el botón de la cabecera cambia el tema y lo recuerda', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  const botonTema = '#acciones-cabecera button[aria-pressed]';
+  afirmar(await pagina.isVisible(botonTema), 'el botón de tema tiene que estar en la cabecera');
+  igual(
+    await pagina.getAttribute(botonTema, 'aria-pressed'),
+    'false',
+    'arranca en claro, así que el botón no está activado',
+  );
+
+  await pagina.click(botonTema);
+  await pagina.waitForTimeout(200);
+  igual(await pagina.getAttribute('html', 'data-tema'), 'oscuro', 'un toque lo pasa a oscuro');
+  igual(
+    await pagina.getAttribute(botonTema, 'aria-pressed'),
+    'true',
+    'y el botón queda activado',
+  );
+  // La barra del sistema también acompaña.
+  igual(
+    await pagina.getAttribute('#color-barra', 'content'),
+    '#111513',
+    'el color de la barra del celular acompaña al tema',
+  );
+
+  // Sobrevive a recargar.
+  await pagina.reload({ waitUntil: 'domcontentloaded' });
+  await pagina.waitForSelector('#barra:not(.oculto)');
+  igual(
+    await pagina.getAttribute('html', 'data-tema'),
+    'oscuro',
+    'el tema elegido tiene que sobrevivir a recargar',
+  );
+
+  // Y vuelve.
+  await pagina.click(botonTema);
+  await pagina.waitForTimeout(200);
+  igual(await pagina.getAttribute('html', 'data-tema'), 'claro', 'otro toque lo devuelve a claro');
+
+  // El botón está en todas las pantallas, no solo en Inicio.
+  for (const v of ['agenda', 'comidas', 'tareas', 'familia']) {
+    await irA(pagina, v);
+    afirmar(await pagina.isVisible(botonTema), `falta el botón de tema en ${v}`);
+  }
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
 prueba('el tema claro y el oscuro se aplican y se recuerdan', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 
