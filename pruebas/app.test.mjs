@@ -1407,6 +1407,59 @@ prueba('se importa un calendario .ics y sus eventos entran a la agenda', async (
   await contexto.close();
 });
 
+prueba('un calendario de Google con una semana movida se importa igual', async (nav) => {
+  const { pagina, contexto, errores } = await abrirApp(nav);
+
+  // Así exporta Google una serie a la que le movieron una semana: otro VEVENT
+  // con EL MISMO UID y un RECURRENCE-ID. Si los dos van al guardado con la
+  // misma clave, la base corta todo y no entra ningún evento.
+  const dia = (n) => enDias(n).replace(/-/g, '');
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Google Inc//Google Calendar 70.9054//EN',
+    'X-WR-CALNAME:Agenda',
+    'BEGIN:VEVENT',
+    'UID:abc123@google.com',
+    `DTSTART;TZID=America/Argentina/Buenos_Aires:${dia(1)}T190000`,
+    `DTEND;TZID=America/Argentina/Buenos_Aires:${dia(1)}T200000`,
+    'RRULE:FREQ=WEEKLY',
+    'SUMMARY:Natación',
+    'END:VEVENT',
+    'BEGIN:VEVENT',
+    'UID:abc123@google.com',
+    `RECURRENCE-ID;TZID=America/Argentina/Buenos_Aires:${dia(8)}T190000`,
+    `DTSTART;TZID=America/Argentina/Buenos_Aires:${dia(8)}T203000`,
+    `DTEND;TZID=America/Argentina/Buenos_Aires:${dia(8)}T213000`,
+    'SUMMARY:Natación (más tarde)',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  await pagina.evaluate((texto) => {
+    globalThis.__falso.icsRemoto = texto;
+  }, ics);
+
+  await irA(pagina, 'familia');
+  await pagina.click('button:has-text("Importar un calendario")');
+  await pagina.waitForSelector('.hoja');
+  await pagina.fill('.hoja input[type="text"]', 'Google');
+  await pagina.fill('.hoja input[type="url"]', 'https://calendar.google.com/x/basic.ics');
+  await pagina.click('.hoja button[type="submit"]');
+
+  await pagina.waitForSelector('.hoja', { state: 'detached', timeout: 10_000 });
+  await pagina.waitForTimeout(400);
+
+  const eventos = await bd(pagina, () => globalThis.__falso.eventos);
+  igual(eventos.length, 2, 'tenían que entrar la serie y la semana movida');
+
+  const uids = eventos.map((e) => e.ics_uid);
+  igual(uids.length, new Set(uids).size, 'dos eventos no pueden compartir el ics_uid');
+
+  igual(errores, [], 'hubo errores de JavaScript');
+  await contexto.close();
+});
+
 prueba('sumar a un hijo sin cuenta', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
 

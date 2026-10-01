@@ -518,3 +518,83 @@ Deno.test('el parser entiende el .ics que genera nuestro feed', async () => {
   assertEquals(aFecha(cumple.inicio), '2026-10-15');
   assertEquals(cumple.repite, 'anual');
 });
+
+// ---------------------------------------------------------------------------
+//  Instancias sueltas de un evento que se repite
+// ---------------------------------------------------------------------------
+//
+//  Esto es lo que rompía al importar Google Calendar. Cuando una semana de un
+//  evento repetido se mueve o se borra, Google escribe otro VEVENT con EL MISMO
+//  UID y un RECURRENCE-ID. Si los dos salen con el mismo ics_uid, el guardado
+//  manda dos filas con la misma clave y Postgres corta todo con "ON CONFLICT DO
+//  UPDATE command cannot affect row a second time".
+
+const GOOGLE_CON_EXCEPCIONES = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+X-WR-CALNAME:Agenda
+BEGIN:VEVENT
+UID:abc123@google.com
+DTSTART;TZID=America/Argentina/Buenos_Aires:20261006T190000
+DTEND;TZID=America/Argentina/Buenos_Aires:20261006T200000
+RRULE:FREQ=WEEKLY;BYDAY=TU
+SUMMARY:Natación
+END:VEVENT
+BEGIN:VEVENT
+UID:abc123@google.com
+RECURRENCE-ID;TZID=America/Argentina/Buenos_Aires:20261013T190000
+DTSTART;TZID=America/Argentina/Buenos_Aires:20261013T203000
+DTEND;TZID=America/Argentina/Buenos_Aires:20261013T213000
+SUMMARY:Natación (más tarde)
+END:VEVENT
+BEGIN:VEVENT
+UID:abc123@google.com
+RECURRENCE-ID;TZID=America/Argentina/Buenos_Aires:20261020T190000
+DTSTART;TZID=America/Argentina/Buenos_Aires:20261020T190000
+STATUS:CANCELLED
+SUMMARY:Natación
+END:VEVENT
+END:VCALENDAR`;
+
+Deno.test('una semana movida no choca con su serie', () => {
+  const { eventos } = parsearIcs(GOOGLE_CON_EXCEPCIONES);
+
+  const uids = eventos.map((e) => e.ics_uid);
+  assertEquals(
+    uids.length,
+    new Set(uids).size,
+    `dos eventos con el mismo ics_uid rompen la importación: ${uids.join(', ')}`,
+  );
+
+  const serie = eventos.find((e) => e.repite === 'semanal');
+  const movida = eventos.find((e) => e.titulo.includes('más tarde'));
+
+  assert(serie, 'tiene que quedar la serie');
+  assert(movida, 'y la semana movida como evento propio');
+  assertEquals(movida.ics_uid, 'abc123@google.com#2026-10-13');
+  assertEquals(aHora(movida.inicio), '20:30');
+  assertEquals(movida.repite, 'no', 'la instancia suelta no se repite');
+});
+
+Deno.test('la serie no dibuja los días que se movieron ni los cancelados', () => {
+  const { eventos } = parsearIcs(GOOGLE_CON_EXCEPCIONES);
+  const serie = eventos.find((e) => e.repite === 'semanal');
+
+  assertEquals(
+    [...serie.exdates].sort(),
+    ['2026-10-13', '2026-10-20'],
+    'el día movido y el borrado tienen que quedar tapados en la serie',
+  );
+});
+
+Deno.test('una instancia suelta que viene antes que su serie también tapa', () => {
+  // El orden adentro del archivo no está garantizado por el RFC.
+  const alReves = GOOGLE_CON_EXCEPCIONES.split('BEGIN:VEVENT');
+  const texto = alReves[0] + 'BEGIN:VEVENT' + alReves[2] +
+    'BEGIN:VEVENT' + alReves[1].replace('END:VCALENDAR', '') +
+    'BEGIN:VEVENT' + alReves[3];
+
+  const { eventos } = parsearIcs(texto);
+  const serie = eventos.find((e) => e.repite === 'semanal');
+  assert(serie.exdates.includes('2026-10-13'), 'tendría que estar tapado igual');
+});

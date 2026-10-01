@@ -483,9 +483,20 @@ export async function borrarCalendario(id, borrarEventos = true) {
  */
 export async function importarEventos(filas) {
   if (!filas.length) return [];
+
+  // Dos filas con el mismo ics_uid en un solo upsert hacen que Postgres corte
+  // todo con "ON CONFLICT DO UPDATE command cannot affect row a second time".
+  // Pasa con calendarios de verdad: Google repite el UID en las instancias
+  // sueltas de un evento que se repite, y hay exports con eventos duplicados.
+  // Las instancias sueltas ya se separan al leer el .ics (ver RECURRENCE-ID en
+  // ics.js); esto es la red abajo, para que un archivo raro no voltee la
+  // importación entera. Gana la última, que en un .ics suele ser la más nueva.
+  const porUid = new Map();
+  for (const f of filas) porUid.set(f.ics_uid, f);
+
   return ok(
     await sb().from('ag_eventos')
-      .upsert(filas, { onConflict: 'hogar_id,ics_uid' })
+      .upsert([...porUid.values()], { onConflict: 'hogar_id,ics_uid' })
       .select(),
   );
 }

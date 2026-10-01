@@ -11,7 +11,7 @@
 //  parseo corre sobre un archivo que viene de afuera, así que conviene que sea
 //  código que se pueda leer entero.
 // ============================================================================
-import { TZ } from './fechas.js';
+import { aFecha, TZ } from './fechas.js';
 
 // ---------------------------------------------------------------------------
 //  Lectura
@@ -316,6 +316,15 @@ export function parsearIcs(texto) {
       case 'RRULE':
         actual._rrule = valor.trim();
         break;
+      case 'RECURRENCE-ID': {
+        // Una instancia suelta de un evento que se repite: la de la semana que
+        // se movió de hora, o la que se borró. Viene con el MISMO UID que la
+        // serie, y eso es lo que rompía la importación: dos filas con la misma
+        // clave en un solo guardado.
+        const f = leerFechaIcs(valor, params);
+        if (f.fecha) actual._recurrencia = f.instante ? aFecha(f.instante) : f.fecha;
+        break;
+      }
       case 'EXDATE': {
         // Puede traer varias fechas separadas por coma.
         for (const v of valor.split(',')) {
@@ -332,8 +341,22 @@ export function parsearIcs(texto) {
 
   // Segunda pasada: resolver fines, duraciones y repeticiones.
   const listos = [];
+  // uid de la serie → fechas que la serie NO tiene que dibujar, porque esa
+  // instancia se movió o se borró.
+  const tapar = new Map();
+  const anotarTapado = (uid, fecha) => {
+    if (!uid || !fecha) return;
+    if (!tapar.has(uid)) tapar.set(uid, new Set());
+    tapar.get(uid).add(fecha);
+  };
+  // uid de la serie → el evento ya armado, para taparle las fechas al final.
+  const series = new Map();
+
   for (const e of eventos) {
     if (e._cancelado) {
+      // Si lo cancelado es una instancia suelta, la serie tiene que dejar de
+      // dibujar ese día. Antes se salteaba y el día cancelado seguía apareciendo.
+      if (e._recurrencia) anotarTapado(e.ics_uid, e._recurrencia);
       saltados++;
       continue;
     }
@@ -356,8 +379,15 @@ export function parsearIcs(texto) {
       ? leerRrule(e._rrule, e.inicio)
       : { repite: 'no', repite_dias: [], repite_hasta: null };
 
-    listos.push({
-      ics_uid: e.ics_uid || null,
+    // La instancia movida se guarda como un evento propio, con un uid derivado
+    // del de la serie: así no choca con ella ni con las otras instancias.
+    const uid = e.ics_uid && e._recurrencia
+      ? `${e.ics_uid}#${e._recurrencia}`
+      : (e.ics_uid || null);
+    if (e._recurrencia) anotarTapado(e.ics_uid, e._recurrencia);
+
+    const fila = {
+      ics_uid: uid,
       titulo: e.titulo,
       detalle: e.detalle ?? null,
       lugar: e.lugar ?? null,
@@ -367,7 +397,17 @@ export function parsearIcs(texto) {
       aviso_minutos: e.aviso_minutos ?? null,
       ...rep,
       exdates: e.exdates,
-    });
+    };
+    listos.push(fila);
+    if (e.ics_uid && !e._recurrencia) series.set(e.ics_uid, fila);
+  }
+
+  // Recién acá se les tapan las fechas a las series: una instancia suelta puede
+  // venir ANTES que su serie en el archivo.
+  for (const [uid, fechas] of tapar) {
+    const serie = series.get(uid);
+    if (!serie) continue;
+    for (const f of fechas) if (!serie.exdates.includes(f)) serie.exdates.push(f);
   }
 
   return { nombre: nombreCalendario, eventos: listos, saltados };

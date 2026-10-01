@@ -576,6 +576,19 @@ export async function borrarCalendario(id, borrarEventos = true) {
 }
 export async function importarEventos(filas) {
   await demora();
+
+  // Postgres corta el upsert entero si el mismo lote toca dos veces la misma
+  // fila. Acá se imita el error tal cual, porque si el doble fuera más
+  // permisivo que la base, la prueba pasaría y la app se rompería con un
+  // calendario de verdad. Es lo que pasó al importar Google Calendar.
+  const vistos = new Set();
+  for (const f of filas) {
+    if (f.ics_uid && vistos.has(f.ics_uid)) {
+      throw new Error('ON CONFLICT DO UPDATE command cannot affect row a second time');
+    }
+    if (f.ics_uid) vistos.add(f.ics_uid);
+  }
+
   const salida = [];
   for (const f of filas) {
     const i = bd.eventos.findIndex((e) => e.ics_uid && e.ics_uid === f.ics_uid);
