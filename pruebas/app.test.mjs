@@ -13,7 +13,7 @@
 // ============================================================================
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -193,6 +193,67 @@ const estaSemana = (n = 0) => {
 // ---------------------------------------------------------------------------
 //  Pruebas
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+//  El punto ciego de todo esto
+// ---------------------------------------------------------------------------
+//
+//  Estas pruebas cambian js/lib/db.js por db-falso.js, así que es el único
+//  módulo de la app que nunca se ejecuta acá. Si el de verdad pierde una
+//  función que la app usa, el doble la sigue teniendo y todo pasa en verde
+//  mientras la app muere al abrirse. Pasó: db.js quedó cortado y se fue sin
+//  escucharHogar. Esto lo mira a mano, leyendo los archivos.
+
+const EXPORTA =
+  /^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm;
+
+/** Los nombres que un módulo exporta, leyendo el texto. */
+function exportados(texto) {
+  return new Set([...texto.matchAll(EXPORTA)].map((m) => m[1]));
+}
+
+/** Todos los .js de js/, incluidas las subcarpetas. */
+async function archivosDeLaApp(dir = join(RAIZ, 'js'), salida = []) {
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    const ruta = join(dir, e.name);
+    if (e.isDirectory()) await archivosDeLaApp(ruta, salida);
+    else if (e.name.endsWith('.js')) salida.push(ruta);
+  }
+  return salida;
+}
+
+prueba('db.js tiene todo lo que la app le pide, y el doble lo imita', async () => {
+  const real = exportados(await readFile(join(RAIZ, 'js/lib/db.js'), 'utf8'));
+  const falso = exportados(await readFile(join(RAIZ, 'pruebas/db-falso.js'), 'utf8'));
+
+  // La app importa el módulo entero: `db` en las vistas, `datos` en main.js.
+  const usados = new Set();
+  for (const ruta of await archivosDeLaApp()) {
+    // Sin imports ni comentarios: en los dos aparece 'db.js' escrito, y eso
+    // se leería como un uso de db.js (la función 'js', que no existe).
+    const texto = (await readFile(ruta, 'utf8'))
+      .replace(/^\s*import[^;]*;/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    for (const m of texto.matchAll(/\b(?:db|datos)\.([A-Za-z_$][\w$]*)/g)) {
+      usados.add(m[1]);
+    }
+  }
+
+  afirmar(usados.size > 20, `algo anda mal con la búsqueda: ${usados.size} usos`);
+
+  igual(
+    [...usados].filter((n) => !real.has(n)).sort(),
+    [],
+    'la app llama a cosas que js/lib/db.js no exporta: la app no abre',
+  );
+
+  igual(
+    [...usados].filter((n) => !falso.has(n)).sort(),
+    [],
+    'db-falso.js no imita todo lo que la app usa: estas pruebas no lo prueban',
+  );
+});
 
 prueba('la app abre sin un solo error de JavaScript', async (nav) => {
   const { pagina, contexto, errores } = await abrirApp(nav);
